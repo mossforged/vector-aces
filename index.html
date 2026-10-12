@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vector Aces</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Sans:wght@400;600&display=swap">
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+  <div id="lobby" hidden></div>
+
+  <div id="game" hidden>
+    <header class="topbar">
+      <div class="logo">VECTOR<span>ACES</span></div>
+      <div id="status" class="status"></div>
+      <nav>
+        <button class="btn ghost small" id="btn-help" title="Quick reference">Rules</button>
+        <button class="btn ghost small" id="btn-concede">Concede</button>
+        <button class="btn ghost small" id="btn-lobby">Lobby</button>
+      </nav>
+    </header>
+    <main class="layout">
+      <section class="table"><canvas id="board"></canvas></section>
+      <aside class="side">
+        <div id="prompt" class="card-panel"></div>
+        <div id="dice" class="card-panel tray" hidden></div>
+        <div id="cards"></div>
+        <div id="log" class="log"></div>
+      </aside>
+    </main>
+  </div>
+
+  <div id="help" class="modal" hidden>
+    <div class="modal-body">
+      <h2>Quick reference</h2>
+      <ol class="qr">
+        <li><b>Planning</b> — secretly pick a maneuver for every ship. Red = +1 stress, green = −1 stress.</li>
+        <li><b>Activation</b> — lowest pilot skill first: reveal, move, then one action. Stressed ships take no actions and can't fly red.</li>
+        <li><b>Combat</b> — highest pilot skill first: attack one enemy inside your arc at Range 1–3. Range 1: +1 attack die. Range 3: +1 defense die. Shooting past an asteroid: +1 defense die.</li>
+        <li><b>End</b> — focus & evade tokens are removed (locks and stress stay).</li>
+      </ol>
+      <p><b>Dice</b> — attack: ✱ hit, ✸ critical, ◉ focus. Defense: ➚ evade, ◉ focus. Each evade cancels a hit (hits before crits). Damage strips shields first, then deals Damage cards (crits face up). A ship dies when its cards reach its hull.</p>
+      <p><b>Collisions</b> — moving into a ship stops you touching it and skips your action; touching ships can't shoot each other. Flying over an asteroid skips your action and rolls 1 attack die for damage; you can't attack while sitting on one. Leaving the table destroys the ship.</p>
+      <p><b>Ties</b> — the player with initiative (fewer squad points; Dominion on a tie) moves and shoots first. Ships with the same pilot skill as the attacker still fire before being removed.</p>
+      <p class="muted">Board: each range band is 100 mm on a 914 mm (3′) table. Hover attack buttons to see the range line.</p>
+    </div>
+  </div>
+
+ <div id="confirm" class="modal" hidden>
+    <div class="modal-body confirm"><p></p><div class="opts"><button class="btn primary" data-ok>OK</button><button class="btn ghost" data-cancel>Cancel</button></div></div>
+  </div>
+
+  <script type="module" src="src/ui/app.js"></script>
+</body>
+</html>
