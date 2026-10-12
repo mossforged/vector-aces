@@ -24,7 +24,13 @@ Legend: ✅ implemented · ◐ simplified (note says how) · ⬜ not yet
 - ✅ Fleeing: any part of the base off the table → destroyed
 - ✅ Obstacles: template or base overlap → skip action, roll 1 attack die (hit = damage, crit = critical); ship stays on the rock and can't attack
 - ◐ Bumped move into obstacle: only the final base is checked (not the template) when a bump also occurred
-- ✅ Actions: focus, evade, target lock (360°, Range 1–3, one lock per ship, replaces old lock), barrel roll (left/right × back/centre/forward), pass
+- ✅ Actions: focus, evade, target lock (360°, Range 1–3, one lock per ship, replaces old lock), barrel roll (left/right × back/centre/forward), boost (1 straight / 1 bank left / 1 bank right), pass
+- ✅ Card actions, free actions granted by cards (even if not on the action bar), multiple actions per turn
+- ✅ Ion tokens: ionized ship skips its dial, flies a white 1-straight, then clears ion
+- ✅ Secondary weapons: Attack (lock) / Attack (focus) costs, spend vs keep lock, discard, turret (360°), range bands per weapon, no range bonuses
+- ✅ Bonus attacks (after a miss, end of phase), attack-twice weapons, splash damage
+- ✅ Defender modifies attack dice before the attacker does
+- ◐ "Reroll up to N dice": offered as presets (reroll blanks / focus / both, worst first) rather than picking individual dice
 - ◐ Barrel roll positions: 3 per side (back/centre/forward) instead of continuous; off-table rolls are not offered
 - ✅ Free actions; no action twice per round
 - ✅ Combat in descending skill; initiative first on ties; one attack per ship
@@ -49,13 +55,16 @@ Flash-Blinded (next attack rolls 0), Smoke in the Cockpit (skill 0 from next rou
 Head Wound (no pilot ability / elite upgrades).
 - ✅ Deck reshuffles discard when empty; ◐ if both empty, extra damage tracked as proxy facedown cards
 
-## Content
-- Ships: Lancer (3/2/3/2; focus, lock; torpedo + drone slots), Wasp (2/3/3/0; focus, roll, evade)
-- Pilots: 4 Lancer, 6 Wasp (5 with abilities)
-- Upgrades: Seeker Torpedoes, Deflector Drone, Repair Drone, Deadeye, Iron Will
+## Content (stage 1: small ships, waves 1–4, from the first-edition dataset)
+- League: Lancer, Bulwark, Dart, Courier, Halberd, Sparrow, Rapier. Dominion: Wasp, Hornet, Talon, Beetle, Mantis.
+- 57 pilots (32 abilities, all implemented). 59 upgrades: elite talents, drones, torpedoes, missiles,
+  cannons, turrets, crew, systems, modifications, one title — all implemented.
+- ◐ Simplified card choices: Commander Ostrava auto-deals the worst of 3 cards; Baron Kessick and
+  Loyal Mechanic trigger automatically (always beneficial); Snap Roll removes the first enemy lock.
+- ⬜ Not yet: bombs (slot shown as "coming soon"), large/huge ships, cloaking, two-lock crew, dial-peeking crew.
 
 ## Not yet
 - ⬜ Missions (escort, asteroid run, satellites) — see WORKSTREAMS.md
 - ⬜ Team play (3–4 players)
-- ⬜ Computer opponent UI (bot exists for tests)
+- ⬜ Computer opponent UI (bot exists for tests; `randomSquad()` powers the squad builder's Random button)
 - ⬜ Measuring tools in the UI (range ruler drag), undo, replay viewer

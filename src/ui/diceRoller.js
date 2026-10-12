@@ -94,7 +94,8 @@ export class DiceRoller {
       // mark cancelled pairs
       const hits = ev.hits + ev.crits;
       box.className = `dm-result show ${hits ? 'hit' : 'miss'}`;
-      box.textContent = hits ? `Hit! ${ev.hits ? `${ev.hits} damage` : ''}${ev.hits && ev.crits ? ' + ' : ''}${ev.crits ? `${ev.crits} critical` : ''}` : 'Miss — all shots evaded';
+      box.className = `dm-result show ${hits || ev.hit ? 'hit' : 'miss'}`;
+      box.textContent = ev.ion ? `Ion hit! 1 damage + ${ev.ion} ion` : hits ? `Hit! ${ev.hits ? `${ev.hits} damage` : ''}${ev.hits && ev.crits ? ' + ' : ''}${ev.crits ? `${ev.crits} critical` : ''}` : ev.hit ? 'Hit, but no damage gets through' : 'Miss — all shots evaded';
       this._hideLater(2600);
     });
   }
@@ -104,10 +105,10 @@ export class DiceRoller {
     this._at(0, () => {
       this._show();
       this.el.innerHTML = `<div class="dm-head"><b style="color:${FACTIONS[ship.owner].color}">${esc(Q.shipName(ship))}</b><small>${esc(ev.reason || 'Roll')}</small></div>
-        <div class="dm-row" data-row="attack"><span class="dm-lbl">Roll</span><div class="dm-dice"></div></div><div class="dm-result"></div>`;
+        <div class="dm-row" data-row="${ev.kind === 'defense' ? 'defense' : 'attack'}"><span class="dm-lbl">Roll</span><div class="dm-dice"></div></div><div class="dm-result"></div>`;
       this.rows = { attack: [], defense: [] };
     });
-    this._rollRow('attack', ev.faces.map(face => ({ face })), state);
+    this._rollRow(ev.kind === 'defense' ? 'defense' : 'attack', ev.faces.map(face => ({ face })), state);
     this._at(300, () => {
       const box = this.el.querySelector('.dm-result'); if (!box) return;
       const f = ev.faces[0];

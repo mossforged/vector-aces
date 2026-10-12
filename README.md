@@ -12,6 +12,11 @@ python3 -m http.server 8080     # then open http://localhost:8080
 node tests/run.mjs              # rules + simulation + network-sync tests
 ```
 
+## Credits
+Ship statistics, maneuver dials and point values are drawn from the community
+[xwing-data](https://github.com/guidokessels/xwing-data) set. All names, ability wording and art
+in this project are original.
+
 ## Developing
 Start with [CONTEXT.md](CONTEXT.md). The work is split into independent workstreams in
 [docs/WORKSTREAMS.md](docs/WORKSTREAMS.md) so each chat or contributor only loads the files it needs.

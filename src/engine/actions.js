@@ -1,95 +1,112 @@
 // The "Perform Action" step: action menus, free actions, and each action's effect.
+// Actions come from the ship's action bar (focus, lock, roll, evade, boost), from cards
+// (`actions` in engine/cards/*) and from repairable Damage cards.
 import { DAMAGE_CARDS } from '../data/damageDeck.js';
 import { push, ask, log, emit, RuleError } from './flow.js';
-import { barrelRollPoses } from './maneuvers.js';
-import { basePolygon, polygonInsideBoard } from './geometry.js';
+import { barrelRollPoses, buildPath } from './maneuvers.js';
+import { basePolygon, polygonInsideBoard, polygonsIntersect } from './geometry.js';
 import { rollFace } from './dice.js';
 import { flipFacedown } from './damage.js';
+import { cardActions, fold, ownSteps } from './hooks.js';
+import { addStress, acquireLock } from './effects.js';
 import {
-  chassis, liveShips, shipName, hasFaceup, activeUpgrades, rangeBetween,
-  overlapsAnyShip, overlapsAnyObstacle, faceupCards,
+  chassis, liveShips, shipName, hasFaceup, rangeBetween, actionBar, hasFlag,
+  overlapsAnyShip, obstaclePolys, faceupCards,
 } from './queries.js';
 
-export const ACTION_LABELS = {
-  focus: 'Focus', evade: 'Evade', lock: 'Target lock', roll: 'Barrel roll',
-  deflector_drone: 'Deflector Drone (+1 agility)', deadeye: 'Deadeye', pass: 'Pass',
-};
+export const ACTION_LABELS = { focus: 'Focus', evade: 'Evade', lock: 'Target lock', roll: 'Barrel roll', boost: 'Boost', pass: 'Pass' };
 
 function lockTargets(state, ship) {
   return liveShips(state).filter(o => o.owner !== ship.owner && rangeBetween(ship, o).band);
 }
 
-function rollPositions(state, ship) {
-  return barrelRollPoses(ship.pose, chassis(ship).size).filter(r => {
-    const poly = basePolygon(r.pose, chassis(ship).size);
-    return polygonInsideBoard(poly) && !overlapsAnyShip(state, poly, ship.id) && !overlapsAnyObstacle(state, poly);
-  });
+function clearOf(state, ship, poly, template = null) {
+  const obs = obstaclePolys(state);
+  return polygonInsideBoard(poly) && !overlapsAnyShip(state, poly, ship.id)
+    && !obs.some(o => polygonsIntersect(poly, o) || (template && polygonsIntersect(template, o)));
 }
 
-/** All actions this ship could take right now (excluding pass). */
-export function availableActions(state, ship, { only = null } = {}) {
-  if (ship.stress > 0) return [];
+export function rollPositions(state, ship) {
+  return barrelRollPoses(ship.pose, chassis(ship).size).filter(r => clearOf(state, ship, basePolygon(r.pose, chassis(ship).size)));
+}
+
+export function boostPositions(state, ship) {
+  const size = chassis(ship).size;
+  return [['BL', 'Bank left'], ['S', 'Straight'], ['BR', 'Bank right']].map(([b, label]) => {
+    const path = buildPath(ship.pose, { speed: 1, bearing: b }, size);
+    return clearOf(state, ship, basePolygon(path.final, size), path.templatePoly) ? { id: b, label, pose: path.final, path } : null;
+  }).filter(Boolean);
+}
+
+/** All actions this ship could take right now (excluding pass). `grant` adds actions not on the bar. */
+export function availableActions(state, ship, { only = null, grant = [] } = {}) {
+  if (ship.stress > 0 && !hasFlag(state, ship, 'actWhileStressed')) return [];
   const used = ship.round.actionsUsed;
-  const repairs = faceupCards(ship)
-    .filter(c => DAMAGE_CARDS[c.card].repair)
-    .map(c => ({ id: `repair:${c.card}`, label: `Repair: ${DAMAGE_CARDS[c.card].name}` }));
   let list = [];
   if (!hasFaceup(ship, 'sensor_burnout')) {
-    for (const a of chassis(ship).actions) list.push({ id: a, label: ACTION_LABELS[a] });
-    for (const u of activeUpgrades(ship)) if (ACTION_LABELS[u] && u !== 'pass') list.push({ id: u, label: ACTION_LABELS[u] });
+    for (const a of new Set([...actionBar(state, ship), ...grant])) list.push({ id: a, label: ACTION_LABELS[a] });
+    for (const [id, def] of Object.entries(cardActions(ship))) if (def.can(state, ship)) list.push({ id, label: def.label });
   }
-  list.push(...repairs);
+  for (const c of faceupCards(ship)) if (DAMAGE_CARDS[c.card].repair) list.push({ id: `repair:${c.card}`, label: `Repair: ${DAMAGE_CARDS[c.card].name}` });
   list = list.filter((a, i) => list.findIndex(b => b.id === a.id) === i && !used.includes(a.id));
   if (only) list = list.filter(a => only.includes(a.id));
   return list.filter(a => {
     if (a.id === 'lock') return lockTargets(state, ship).length > 0;
     if (a.id === 'roll') return rollPositions(state, ship).length > 0;
+    if (a.id === 'boost') return boostPositions(state, ship).length > 0;
     return true;
   });
 }
 
 /** Ask the ship's owner to pick an action (or a free action when `free`). */
-export function askAction(state, ship, { free = false, only = null, reason = '' } = {}) {
-  const opts = availableActions(state, ship, { only });
+export function askAction(state, ship, { free = false, only = null, grant = [], reason = '', extra = {} } = {}) {
+  const opts = availableActions(state, ship, { only, grant });
   if (!opts.length) return;
   ask(state, {
     player: ship.owner, kind: 'action', ship: ship.id,
-    text: free ? `${reason || 'Free action'} for ${shipName(ship)}?` : `Choose an action for ${shipName(ship)}.`,
+    text: free ? `${reason || 'Free action'} — ${shipName(ship)}` : `Choose an action for ${shipName(ship)}.`,
     options: [...opts, { id: 'pass', label: free ? 'Skip' : 'Pass' }],
-    onChoose: 'action', data: { ship: ship.id, free },
+    onChoose: 'action', data: { ship: ship.id, free, ...extra },
   });
 }
 
 export function performAction(state, ship, id) {
   ship.round.actionsUsed.push(id);
   switch (id) {
-    case 'focus': ship.tokens.focus++; log(state, `${shipName(ship)} focuses.`); break;
-    case 'evade': ship.tokens.evade++; log(state, `${shipName(ship)} prepares to evade.`); break;
-    case 'deflector_drone': ship.round.agilityBonus += 1; log(state, `${shipName(ship)}'s drone boosts agility.`); break;
-    case 'deadeye': ship.round.deadeye = true; log(state, `${shipName(ship)} lines up a Deadeye shot.`); break;
-    case 'lock': {
-      const opts = lockTargets(state, ship).map(o => ({ id: o.id, label: `${shipName(o)} (Range ${rangeBetween(ship, o).band})`, target: o.id }));
-      ask(state, { player: ship.owner, kind: 'lockTarget', ship: ship.id, text: 'Lock onto which enemy?', options: opts, onChoose: 'lockTarget', data: { ship: ship.id } });
+    case 'focus': {
+      const n = fold(state, ship, 'focusGain', 1);
+      ship.tokens.focus += n;
+      log(state, `${shipName(ship)} focuses${n > 1 ? ` (+${n})` : ''}.`);
       break;
     }
+    case 'evade': ship.tokens.evade++; log(state, `${shipName(ship)} prepares to evade.`); break;
+    case 'lock': push(state, { t: 'lockPrompt', ship: ship.id }); break;
     case 'roll': {
       const opts = rollPositions(state, ship).map(r => ({ id: r.id, label: `${r.side} · ${r.label}`, pose: r.pose }));
       ask(state, { player: ship.owner, kind: 'rollPosition', ship: ship.id, text: 'Barrel roll where?', options: opts, onChoose: 'rollPosition', data: { ship: ship.id } });
       break;
     }
-    default:
+    case 'boost': {
+      const opts = boostPositions(state, ship).map(r => ({ id: r.id, label: r.label, pose: r.pose }));
+      ask(state, { player: ship.owner, kind: 'rollPosition', ship: ship.id, text: 'Boost which way?', options: opts, onChoose: 'boostPosition', data: { ship: ship.id } });
+      break;
+    }
+    default: {
+      const card = cardActions(ship)[id];
+      if (card) { card.perform(state, ship); break; }
       if (id.startsWith('repair:')) {
-        const card = id.slice(7);
-        const def = DAMAGE_CARDS[card];
-        if (def.repairAlways) { flipFacedown(state, ship, card); break; }
+        const cardId = id.slice(7);
+        const def = DAMAGE_CARDS[cardId];
+        if (def.repairAlways) { flipFacedown(state, ship, cardId); break; }
         const f = rollFace(state, 'attack');
-        const ok = f === 'hit' || (card === 'weapons_fault' && f === 'crit');
+        const ok = f === 'hit' || (cardId === 'weapons_fault' && f === 'crit');
         emit(state, { type: 'roll', ship: ship.id, faces: [f], reason: `Repair: ${def.name}`, success: ok });
         log(state, `${shipName(ship)} attempts repairs: rolled ${f}.`);
-        if (ok) flipFacedown(state, ship, card);
+        if (ok) flipFacedown(state, ship, cardId);
         break;
       }
       throw new RuleError(`unknown action ${id}`);
+    }
   }
 }
 
@@ -97,26 +114,41 @@ export const steps = {
   actionStep(state, s) {
     const ship = state.ships[s.ship];
     if (ship.destroyed || ship.round.skipAction) return;
+    const n = s.n || 1;
+    if (n < fold(state, ship, 'actionsPerTurn', 1)) push(state, { t: 'actionStep', ship: ship.id, n: n + 1 });
     askAction(state, ship);
   },
   freeAction(state, s) {
     const ship = state.ships[s.ship];
     if (ship.destroyed) return;
-    askAction(state, ship, { free: true, only: s.only, reason: s.reason });
+    askAction(state, ship, { free: true, only: s.only, grant: s.grant || [], reason: s.reason, extra: { stressAfter: !!s.stressAfter, markSkip: !!s.markSkip } });
   },
+  afterAction(state, s) {
+    const ship = state.ships[s.ship];
+    if (ship.destroyed) return;
+    push(state, ...ownSteps(state, ship, 'afterAction', s.action));
+  },
+  lockPrompt(state, s) {
+    const ship = state.ships[s.ship ?? s.choice];
+    if (!ship || ship.destroyed) return;
+    const opts = lockTargets(state, ship).map(o => ({ id: o.id, label: `${shipName(o)} (Range ${rangeBetween(ship, o).band})`, target: o.id }));
+    if (!opts.length) return;
+    ask(state, { player: ship.owner, kind: 'lockTarget', ship: ship.id, text: `${shipName(ship)}: lock onto which enemy?`, options: opts, onChoose: 'lockTarget', data: { ship: ship.id } });
+  },
+  stressStep(state, s) { addStress(state, state.ships[s.ship]); },
 };
 
 export const choices = {
   action(state, data, choice) {
     if (choice === 'pass') return;
     const ship = state.ships[data.ship];
+    if (data.stressAfter) push(state, { t: 'stressStep', ship: ship.id });
+    if (data.markSkip) ship.round.skipAction = true;
+    push(state, { t: 'afterAction', ship: ship.id, action: choice });
     performAction(state, ship, choice);
   },
   lockTarget(state, data, choice) {
-    const ship = state.ships[data.ship];
-    ship.lockOn = choice;
-    emit(state, { type: 'lock', ship: ship.id, target: choice });
-    log(state, `${shipName(ship)} locks onto ${shipName(state.ships[choice])}.`);
+    acquireLock(state, state.ships[data.ship], state.ships[choice]);
   },
   rollPosition(state, data, choice) {
     const ship = state.ships[data.ship];
@@ -128,6 +160,15 @@ export const choices = {
     emit(state, { type: 'move', ship: ship.id, path: [from, r.pose] });
     log(state, `${shipName(ship)} barrel rolls ${r.side}.`);
   },
+  boostPosition(state, data, choice) {
+    const ship = state.ships[data.ship];
+    const r = boostPositions(state, ship).find(x => x.id === choice);
+    if (!r) throw new RuleError('illegal boost');
+    const samples = [];
+    for (let i = 0; i <= 12; i++) samples.push(r.path.poseAt(-r.path.base + ((r.path.length + r.path.base) * i) / 12));
+    ship.pose = r.pose;
+    state.touches = state.touches.filter(([a, b]) => a !== ship.id && b !== ship.id);
+    emit(state, { type: 'move', ship: ship.id, path: samples });
+    log(state, `${shipName(ship)} boosts (${r.label.toLowerCase()}).`);
+  },
 };
-
-export { push };

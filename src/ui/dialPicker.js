@@ -12,11 +12,14 @@ import { maneuverIcon, maneuverLabel, esc } from './glyphs.js';
  * @param onChange called after a pick
  * @param onLock   called when "Lock in" is pressed
  */
-export function renderDialPicker(el, { state, ships, draft, onChange, onLock, onFocusShip }) {
+export function renderDialPicker(el, { state, ships: all, draft, onChange, onLock, onFocusShip }) {
+  const ionized = all.filter(s => s.ion > 0);
+  const ships = all.filter(s => !(s.ion > 0));
   const done = ships.every(s => draft[s.id]);
   el.innerHTML = `
     <div class="dial-list">
       ${ships.map(s => dialBlock(state, s, draft[s.id])).join('')}
+      ${ionized.map(s => `<div class="dial ionized"><div class="dial-head"><span class="ps">${Q.effectiveSkill(state, s)}</span><b>${esc(Q.shipName(s))}</b><span class="tag ion">ionized</span></div><p class="hint">Systems scrambled: this ship will drift 1 straight (white) this round.</p></div>`).join('')}
     </div>
     <button class="btn primary wide" data-lock ${done ? '' : 'disabled'}>${done ? 'Lock in dials' : `Choose ${ships.filter(s => !draft[s.id]).length} more`}</button>
     <p class="hint">Plan in your head — templates can't be tested before you commit.</p>`;

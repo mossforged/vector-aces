@@ -11,18 +11,21 @@ export function renderShipTooltip(el, state, shipId) {
   if (!s) { el.hidden = true; return; }
   const ch = Q.chassis(s), pl = Q.pilot(s);
   const fac = FACTIONS[s.owner];
+  const shieldMax = Q.stat(state, s, 'maxShields');
   const hullMax = ch.hull, hullLeft = Math.max(0, hullMax - Q.hullDamage(s));
   const faceup = s.damage.filter(c => c.faceup), facedown = s.damage.length - faceup.length;
   const lock = s.lockOn && state.ships[s.lockOn];
   const lockedBy = Q.liveShips(state).filter(o => o.lockOn === s.id);
   const touching = state.touches.filter(t => t.includes(s.id)).map(t => state.ships[t[0] === s.id ? t[1] : t[0]]).filter(Boolean);
   const onRock = Q.obstaclePolys(state).some(o => G.polygonsIntersect(Q.shipPoly(s), o));
-  const total = s.shields + hullLeft, max = ch.shields + hullMax;
+  const total = s.shields + hullLeft, max = shieldMax + hullMax;
   const condition = s.destroyed ? 'Destroyed' : total === max ? 'Undamaged' : hullLeft <= 1 ? 'Critical' : hullLeft < hullMax ? 'Hull damaged' : 'Shields down';
-  const condCls = s.destroyed || hullLeft <= 1 ? 'bad' : hullLeft < hullMax || s.shields < ch.shields ? 'warn' : 'good';
+  const condCls = s.destroyed || hullLeft <= 1 ? 'bad' : hullLeft < hullMax || s.shields < shieldMax ? 'warn' : 'good';
 
   const status = [];
   if (s.stress) status.push(`<li class="bad">Stressed ×${s.stress}: no actions, no red maneuvers</li>`);
+  if (s.ion) status.push(`<li class="warn">Ionized: will drift 1 straight next activation</li>`);
+  if (s.delayedDestroy) status.push('<li class="bad">Wrecked: destroyed at the end of combat</li>');
   if (onRock) status.push('<li class="bad">On an asteroid: cannot attack</li>');
   for (const t of touching) status.push(`<li class="warn">Touching ${esc(Q.shipName(t))}: can't shoot each other</li>`);
   if (s.round.skipAction && state.phase === 'activation') status.push('<li class="warn">Skipped its action this round</li>');
@@ -30,7 +33,7 @@ export function renderShipTooltip(el, state, shipId) {
   if (Q.effectiveSkill(state, s) !== pl.skill) status.push(`<li class="bad">Pilot skill reduced to ${Q.effectiveSkill(state, s)}</li>`);
 
   const stat = (cls, label, val, maxv) => `<div class="tt-stat ${cls}"><b>${val}${maxv !== undefined ? `<small>/${maxv}</small>` : ''}</b><span>${label}</span></div>`;
-  const bar = `<div class="tt-bar">${Array.from({ length: ch.shields }, (_, i) => `<i class="${i < s.shields ? 'shd' : 'lost'}"></i>`).join('')}${Array.from({ length: hullMax }, (_, i) => `<i class="${i < hullLeft ? 'hul' : 'lost'}"></i>`).join('')}</div>`;
+  const bar = `<div class="tt-bar">${Array.from({ length: shieldMax }, (_, i) => `<i class="${i < s.shields ? 'shd' : 'lost'}"></i>`).join('')}${Array.from({ length: hullMax }, (_, i) => `<i class="${i < hullLeft ? 'hul' : 'lost'}"></i>`).join('')}</div>`;
 
   el.innerHTML = `
     <div class="tt" style="--fc:${fac.color}">
@@ -42,7 +45,7 @@ export function renderShipTooltip(el, state, shipId) {
         ${stat('atk', 'Attack', Q.stat(state, s, 'attack'))}
         ${stat('agi', 'Agility', Q.stat(state, s, 'agility'))}
         ${stat('hul', 'Hull', hullLeft, hullMax)}
-        ${stat('shd', 'Shields', s.shields, ch.shields)}
+        ${stat('shd', 'Shields', s.shields, shieldMax)}
       </div>
       ${bar}
       <div class="tt-cond ${condCls}">${condition}${facedown ? ` · ${facedown} damage card${facedown > 1 ? 's' : ''} face down` : ''}</div>
@@ -56,7 +59,7 @@ export function renderShipTooltip(el, state, shipId) {
       ${status.length ? `<ul class="tt-status">${status.join('')}</ul>` : ''}
       ${s.round.revealed ? `<div class="tt-man">This round: ${maneuverIcon(s.round.revealed.replace(/^\d+/, ''), 'w', 16)} ${maneuverLabel(s.round.revealed)}</div>` : ''}
       ${pl.ability ? `<p class="tt-ability">${esc(pl.text)}</p>` : ''}
-      <div class="tt-actions">Actions: ${ch.actions.map(a => ({ focus: 'Focus', evade: 'Evade', lock: 'Target lock', roll: 'Barrel roll' }[a])).join(' · ')}</div>
+      <div class="tt-actions">Actions: ${Q.actionBar(state, s).map(a => ({ focus: 'Focus', evade: 'Evade', lock: 'Target lock', roll: 'Barrel roll', boost: 'Boost' }[a])).join(' · ')}</div>
       ${s.upgrades.length ? `<ul class="tt-ups">${s.upgrades.map(u => `<li class="${u.discarded ? 'gone' : ''}"><b>${esc(UPGRADES[u.id].name)}</b> ${esc(UPGRADES[u.id].text)}</li>`).join('')}</ul>` : ''}
     </div>`;
   el.hidden = false;

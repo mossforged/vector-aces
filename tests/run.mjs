@@ -39,7 +39,8 @@ test('setup: initiative and deployment order', () => {
   const s = newGame({ seed: 1, squads: intro });
   assert.equal(s.initiative, 'dominion'); // 28 vs 28 → default faction
   assert.equal(s.prompt.kind, 'deploy');
-  assert.equal(Q.pilot(s.ships[s.prompt.ship]).skill, 2); // lowest skill first
+  const lowest = Math.min(...Object.values(s.ships).map(x => Q.pilot(x).skill));
+  assert.equal(Q.pilot(s.ships[s.prompt.ship]).skill, lowest); // lowest skill first
 });
 
 function deployAll(s) {
@@ -69,7 +70,7 @@ test('planning waits for both, then activates lowest skill first', () => {
   ({ state: s } = applyAction(s, { type: 'SUBMIT_DIALS', player: 'dominion', dials: dials('dominion') }));
   assert.equal(s.phase, 'activation');
   assert.equal(s.prompt.kind, 'action');
-  assert.equal(Q.pilot(s.ships[s.prompt.ship]).skill, 2);
+  assert.equal(Q.pilot(s.ships[s.prompt.ship]).skill, Math.min(...Object.values(s.ships).map(x => Q.pilot(x).skill)));
 });
 
 test('red maneuver gives stress; stressed ship has no actions', () => {
@@ -172,3 +173,10 @@ console.log('network');
 const { runNetTest } = await import('./net.mjs');
 const n = await runNetTest(20);
 console.log(`  ✓ ${n} two-client games stayed in sync with secret dials`);
+
+await import('./mechanics.mjs');
+console.log('cards');
+const { runCardSim } = await import('./cards.mjs');
+const sim = await runCardSim(250);
+assert.equal(sim.never.length, 0, `cards never drafted: ${sim.never}`);
+console.log('  ✓ 250 random-squad games ran without rule errors');

@@ -44,10 +44,20 @@ Steps and choices are registered per module (`export const steps = {…}; export
 in `engine/index.js`. To add a new phase or sub-sequence, add steps in a new module and register it.
 
 Round flow (step names):
-`startRound` → planning prompt → `activationPhase` → `activate` ×N → `move` → (`obstacleHit`,
-`simpleDamage`, `rollForDamage`, `repairDrone`, `freeAction`) → `actionStep` → `combatPhase` →
-`attackStep` ×N → (`rollAttack`, `modAttack`, `rollDefense`, `modDefense`, `resolveAttack`) →
-`finishCombat` → `endPhase` → `startRound` …
+`startRound` → planning prompt → `activationPhase` → `activate` ×N (→ before-reveal card steps →
+`reveal` → on-reveal card steps → `stressCheck` → `move` → obstacle/after-maneuver steps →
+`actionStep` → `afterAction`) → `combatPhase` (start-of-combat card steps) → `combatOrder` →
+`attackStep` ×N → [attack sequence] → `finishCombat` → `endPhase` (end-phase card steps) →
+`endCleanup` → `startRound` …
+
+Attack sequence: `atkStage preRoll` → `rollAttack` → `atkStage afterRoll` → `atkStage defOnAttack`
+→ `atkStage attack` → `rollDefense` → `atkStage defense` → `compareAttack` → `atkStage onHit` →
+`dealDamage` → `afterAttack` (card steps such as bonus attacks, second volleys, splash damage).
+Each `atkStage` gathers options from core rules, the weapon card and every card owned by the
+deciding player's ships, and prompts until Done.
+
+A generic `pick` prompt (`flow.pick`) lets cards ask "which ship?" / "use this?" and continue with
+a card step (`cardStep(cardId, name, data)` → registered as `card:<id>:<name>`).
 
 ### Prompt kinds the UI must handle
 | kind | who | notes |
@@ -56,11 +66,12 @@ Round flow (step names):
 | `deploy` | ship owner | option `auto`, or `place` with `{x,y,h}` |
 | `planning` | both | answered with SUBMIT_DIALS |
 | `overrideManeuver` | opponent | stressed ship revealed red; options carry `maneuver` |
-| `action` | owner | ids: focus, evade, lock, roll, deflector_drone, deadeye, repair:<card>, pass |
+| `action` | owner | ids: focus, evade, lock, roll, boost, card action ids, repair:<card>, pass |
 | `lockTarget` | owner | options carry `target` |
-| `rollPosition` | owner | options carry `pose` |
-| `declareAttack` | attacker | ids `<shipId>|<weapon>` + `hold`; options carry `target`, `weapon` |
-| `modAttack` / `modDefense` | attacker / defender | repeatable until `done`; dice live in `state.attack` |
+| `rollPosition` | owner | barrel roll / boost destinations; options carry `pose` |
+| `declareAttack` | attacker | ids `<shipId>|<weapon>[|f]` + `hold`; options carry `target`, `weapon` |
+| `attackPrep` / `modAttack` / `modAttackDef` / `modDefense` / `onHit` | see attack sequence | repeatable until `done`; dice live in `state.attack` |
+| `pick` | varies | card choices; options may carry `target` or `pose`; usually has `skip` |
 
 Unknown kinds render as generic buttons, so new prompt kinds work in the UI without UI changes.
 
@@ -68,7 +79,13 @@ Unknown kinds render as generic buttons, so new prompt kinds work in the UI with
 - Geometry (mm): `geometry.js` (polygon overlap, distance, arc clipping, range bands), `maneuvers.js`
   (template paths parameterised by arc length → used for final pose, bump back-off and animation).
 - Modifiers from damage cards: `queries.stat()`, `queries.maneuverColor()`, `damage.resolveFaceup()`.
-- Pilot/upgrade abilities: `abilities.js` hooks (see header comment there).
+- Pilot/upgrade abilities: one object per card in `cards/*.js`, plugged in through the hooks listed
+  at the top of `hooks.js` (stat changes, dice options, compare rules, event and phase steps,
+  card actions). Weapon effects live under `weapon:` and are looked up by `a.weapon`, so they work
+  after the card is discarded to fire.
+- Token changes that other cards react to go through `effects.js` (`addStress`, `spendFocus`,
+  `spendLock`, `acquireLock`).
+- Ion: `ship.ion` > 0 → no dial, forced white 1-straight, tokens cleared after moving.
 - Simultaneous fire: ships destroyed by an equal-skill attacker get `pendingDestroy` and are removed
   when combat moves to a lower skill (`resolvePendingDestroys`).
 
@@ -115,10 +132,12 @@ renders the hover card from the same `Q.*` queries as the ship cards.
 UI state (selected ship, draft dials, hotseat hand-off) lives in `app.ui`.
 
 ## Adding things — recipes
-- **New pilot**: `data/pilots.js` entry (+ `ability` id) → handle the id in `engine/abilities.js` → test.
-- **New upgrade**: `data/upgrades.js` (slot/cost/weapon/action) → if it's an action, add a label in
-  `actions.ACTION_LABELS` and a case in `performAction`; if passive, a hook in `abilities.js`.
-- **New ship**: `data/ships.js` (stats, actions, slots, dial) + art function in `render/shipArt.js`.
+- **Pilot / upgrade / ship from the dataset**: `tools/xwing-import/README.md` (catalog entry → build
+  → card in `engine/cards/*` → art for new ships).
+- **Original content**: add it to `CUSTOM_SHIPS` / `CUSTOM_PILOTS` / `CUSTOM_UPGRADES` in the
+  `src/data/*.js` wrappers (same shape as the generated entries), then a card as above.
+- **New card behaviour**: copy the closest existing card in `engine/cards/*` — most are 3–10 lines.
+  Every option must mark itself used (`mark(a, key)`) so the prompt can't loop.
 - **New damage card**: `data/damageDeck.js`; immediate effects in `damage.resolveFaceup`, ongoing
   ones in `queries.js` or the step that checks them.
 - **Missions**: see WORKSTREAMS.md → Missions.

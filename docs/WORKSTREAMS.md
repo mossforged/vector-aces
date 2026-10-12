@@ -17,13 +17,21 @@ Shared contracts nobody should break without updating this file:
 
 ---
 
-## A. Content & retheme
-Add ships, pilots, upgrades, damage cards, presets; rename factions / restyle the setting.
-- **Read:** `src/data/*` (all small), `src/engine/abilities.js`
-- **Maybe touch:** `src/engine/actions.js` (new action types), `src/render/shipArt.js` (art for a new ship)
-- **Interface:** data shapes; ability ids handled in `abilities.js` hooks.
-- **Ideas:** a third chassis per faction (heavy bomber with a turret arc → needs `arc: 'turret'` support in
-  `queries.attackGeometry`), more elite talents, retheme into another setting.
+## A. Content (more ships, pilots, upgrades) & retheme
+Stage 1 is done: 12 small ships (waves 1–4), 57 pilots, 59 upgrades.
+- **Read:** `tools/xwing-import/README.md`, `tools/xwing-import/catalog.js`, `src/engine/hooks.js`
+  (header), then only the `src/engine/cards/*` file for the card type you add.
+- **Interface:** catalog entries keyed by dataset id; card objects keyed by our id.
+- **Next stages:**
+  - *Stage 2 — large ships & arcs:* large bases (`CONFIG.baseSize.large`, templates from the base
+    edge), rear/turret primary arcs (`ships.arcs`, `queries.attackGeometry`), 2 ion tokens for
+    large ships. Then import the large ships of waves 2–5.
+  - *Stage 3 — bombs, cloak, more maneuvers:* bomb tokens on the board (drop/detonate steps,
+    renderer support), cloak/decloak, sloop & tallon roll templates (importer `BEARING`).
+  - *Stage 4 — later waves & a third faction* (dataset's Scum ships → a new faction in `factions.js`).
+- **Excluded for now** (need missing mechanics): bombs, Weapons Engineer (two locks), Intelligence
+  Agent (peek at dials), faction crew for ships we don't have, cloak modifications, huge ships.
+- **Retheme:** names/text in `catalog.js`, colours in `factions.js`, art in `render/shipArt.js`.
 
 ## B. Rules engine
 Fix rules gaps and edge cases (see `docs/RULES_COVERAGE.md` ◐/⬜ items).

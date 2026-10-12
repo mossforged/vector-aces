@@ -478,6 +478,7 @@ function drawLabels(ctx, cam, st, s, pose, dpr, emphasise) {
   for (let i = 0; i < s.tokens.focus; i++) tokens.push(['F', '#2f9e5a']);
   for (let i = 0; i < s.tokens.evade; i++) tokens.push(['E', '#2f86a8']);
   for (let i = 0; i < s.stress; i++) tokens.push(['!', '#c83434']);
+  for (let i = 0; i < (s.ion || 0); i++) tokens.push(['ϟ', '#3d5bd6']);
   if (Q.liveShips(st).some(o => o.lockOn === s.id)) tokens.push(['⌖', '#b03030']);
   if (s.damage.some(c => c.faceup)) tokens.push(['✸', '#c88a20']);
   const tw = 13 * u, tt = tokens.length * tw;

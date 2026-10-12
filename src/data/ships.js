@@ -1,44 +1,15 @@
-// Ship chassis: stats, actions, upgrade slots and maneuver dial.
+// Ship chassis. Imported content lives in gen/content.js (see tools/xwing-import);
+// add hand-made ships to CUSTOM_SHIPS below with the same shape.
+//
 // A dial entry is "<speed><bearing>:<color>".
 //   bearings: S straight, BL/BR bank, TL/TR turn, K reverse (180°) turn
 //   colors:   g green (removes stress), w white, r red (adds stress)
-// The engine never hard-codes a ship; add a chassis here + pilots in pilots.js.
+// actions: focus, lock, roll, evade, boost.   size: small (large later).
+import { GEN_SHIPS } from './gen/content.js';
 
-export const SHIPS = {
-  lancer: {
-    id: 'lancer',
-    name: 'Lancer',
-    faction: 'league',
-    size: 'small',
-    attack: 3, agility: 2, hull: 3, shields: 2,
-    actions: ['focus', 'lock'],
-    slots: ['torpedo', 'drone'],
-    art: 'lancer',            // key into render/shipArt.js (or swap for an image later)
-    dial: [
-      '1BL:g', '1S:g', '1BR:g',
-      '2TL:w', '2BL:w', '2S:g', '2BR:w', '2TR:w',
-      '3TL:w', '3BL:w', '3S:w', '3BR:w', '3TR:w',
-      '4S:w', '4K:r',
-    ],
-  },
-  wasp: {
-    id: 'wasp',
-    name: 'Wasp',
-    faction: 'dominion',
-    size: 'small',
-    attack: 2, agility: 3, hull: 3, shields: 0,
-    actions: ['focus', 'roll', 'evade'],
-    slots: [],
-    art: 'wasp',
-    dial: [
-      '1TL:w', '1TR:w',
-      '2TL:w', '2BL:g', '2S:g', '2BR:g', '2TR:w',
-      '3TL:w', '3BL:w', '3S:g', '3BR:w', '3TR:w', '3K:r',
-      '4S:w', '4K:r',
-      '5S:w',
-    ],
-  },
-};
+const CUSTOM_SHIPS = {};
+
+export const SHIPS = { ...GEN_SHIPS, ...CUSTOM_SHIPS };
 
 export const BEARINGS = ['TL', 'BL', 'S', 'BR', 'TR', 'K'];
 

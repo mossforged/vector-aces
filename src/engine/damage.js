@@ -4,7 +4,13 @@ import { UPGRADES } from '../data/upgrades.js';
 import { shuffle } from './rng.js';
 import { rollFace } from './dice.js';
 import { log, emit } from './flow.js';
-import { chassis, hullDamage, hasUpgrade, shipName, shipList, effectiveSkill } from './queries.js';
+import { cardsOf, flag } from './hooks.js';
+import { addStress } from './effects.js';
+import { chassis, hullDamage, shipName, shipList, effectiveSkill } from './queries.js';
+
+// Worst-first ranking used when an ability lets the attacker choose which card to deal.
+const SEVERITY = ['direct_hit', 'console_blaze', 'smoke_cockpit', 'blinded', 'weapons_fault', 'sensor_burnout', 'head_wound',
+  'engine_fault', 'ruptured_plating', 'hull_breach', 'dazed', 'munitions_jam', 'minor_explosion', 'thruster_fire'];
 
 function drawCard(state) {
   if (!state.damageDeck.length) {
@@ -15,8 +21,12 @@ function drawCard(state) {
   return state.damageDeck.pop();
 }
 
-/** Suffer `hits` normal then `crits` critical damage, one at a time (shields first). */
-export function sufferDamage(state, ship, hits, crits = 0) {
+/**
+ * Suffer `hits` normal then `crits` critical damage, one at a time (shields first).
+ * opts.attacker: the attacking ship (for "choose the faceup card" effects)
+ * opts.track:    array that receives the uid of every Damage card dealt
+ */
+export function sufferDamage(state, ship, hits, crits = 0, opts = {}) {
   const seq = [...Array(hits).fill(false), ...Array(crits).fill(true)];
   for (const crit of seq) {
     if (ship.destroyed) return;
@@ -24,38 +34,48 @@ export function sufferDamage(state, ship, hits, crits = 0) {
       ship.shields--;
       emit(state, { type: 'shield', ship: ship.id });
       log(state, `${shipName(ship)} loses a shield.`);
-    } else {
-      const deckEmpty = !state.damageDeck.length && !state.damageDiscard.length;
-      const card = drawCard(state);
-      if (!card) { // component limitation: track abstractly
-        ship.damage.push({ card: 'direct_hit', faceup: false, round: state.round, proxy: true });
-      } else {
-        const faceup = crit && !deckEmpty;
-        ship.damage.push({ card, faceup, round: state.round });
-        emit(state, { type: 'damage', ship: ship.id, card, faceup });
-        if (faceup) {
-          log(state, `${shipName(ship)} suffers a critical hit: ${DAMAGE_CARDS[card].name}.`);
-          resolveFaceup(state, ship, ship.damage.length - 1);
-        } else log(state, `${shipName(ship)} takes 1 damage.`);
-      }
-    }
+    } else dealCard(state, ship, crit, opts);
     checkDestroyed(state, ship);
   }
 }
 
-/** Immediate effects of a card dealt faceup. Ongoing effects are read by queries/hooks. */
-function resolveFaceup(state, ship, idx) {
-  const c = ship.damage[idx];
-  const def = DAMAGE_CARDS[c.card];
-  if (def.trait === 'pilot' && hasUpgrade(ship, 'iron_will')) {
-    ship.damage.splice(idx, 1);
-    state.damageDiscard.push(c.card);
-    log(state, `${shipName(ship)}'s Iron Will shrugs off ${def.name}.`);
+function dealCard(state, ship, crit, opts) {
+  const deckEmpty = !state.damageDeck.length && !state.damageDiscard.length;
+  let card = drawCard(state);
+  if (!card) { // component limitation: track abstractly
+    ship.damage.push({ card: 'direct_hit', faceup: false, round: state.round, proxy: true, uid: state.uid++ });
     return;
   }
+  const faceup = crit && !deckEmpty;
+  if (faceup && opts.attacker && flag(state, opts.attacker, 'faceupDrawThree')) {
+    const drawn = [card, drawCard(state), drawCard(state)].filter(Boolean);
+    drawn.sort((x, y) => SEVERITY.indexOf(x) - SEVERITY.indexOf(y));
+    card = drawn.shift();
+    state.damageDiscard.push(...drawn);
+    log(state, `${shipName(opts.attacker)} picks the nastiest of ${drawn.length + 1} damage cards.`);
+  }
+  for (const c of cardsOf(ship)) {
+    if (c.onDealt?.(state, ship, card, faceup, DAMAGE_CARDS[card]) === 'discard') {
+      state.damageDiscard.push(card);
+      if (faceup) log(state, `${shipName(ship)} shrugs off ${DAMAGE_CARDS[card].name}.`);
+      return;
+    }
+  }
+  const entry = { card, faceup, round: state.round, uid: state.uid++ };
+  ship.damage.push(entry);
+  opts.track?.push(entry.uid);
+  emit(state, { type: 'damage', ship: ship.id, card, faceup });
+  if (faceup) {
+    log(state, `${shipName(ship)} suffers a critical hit: ${DAMAGE_CARDS[card].name}.`);
+    resolveFaceup(state, ship, entry);
+  } else log(state, `${shipName(ship)} takes 1 damage.`);
+}
+
+/** Immediate effects of a card that becomes faceup. Ongoing effects are read by queries. */
+export function resolveFaceup(state, ship, c) {
   switch (c.card) {
     case 'thruster_fire':
-      ship.stress++; c.faceup = false;
+      addStress(state, ship); c.faceup = false;
       break;
     case 'munitions_jam': {
       const w = ship.upgrades.find(u => !u.discarded && UPGRADES[u.id].weapon);
@@ -75,14 +95,31 @@ function resolveFaceup(state, ship, idx) {
   }
 }
 
+/** Flip specific facedown cards (by uid) faceup and resolve them. */
+export function flipFaceup(state, ship, uids) {
+  for (const c of ship.damage) {
+    if (!uids.includes(c.uid) || c.faceup || c.proxy || ship.destroyed) continue;
+    c.faceup = true;
+    log(state, `${shipName(ship)}: ${DAMAGE_CARDS[c.card].name} flips faceup!`);
+    emit(state, { type: 'damage', ship: ship.id, card: c.card, faceup: true });
+    resolveFaceup(state, ship, c);
+  }
+  checkDestroyed(state, ship);
+}
+
 export function flipFacedown(state, ship, cardId) {
   const c = ship.damage.find(d => d.faceup && d.card === cardId);
   if (c) { c.faceup = false; log(state, `${shipName(ship)} repairs ${DAMAGE_CARDS[cardId].name}.`); }
 }
 
 export function checkDestroyed(state, ship) {
-  if (ship.destroyed || ship.pendingDestroy) return;
+  if (ship.destroyed || ship.pendingDestroy || ship.delayedDestroy) return;
   if (hullDamage(ship) < chassis(ship).hull) return;
+  if (flag(state, ship, 'delayDestruction')) {
+    ship.delayedDestroy = true;
+    log(state, `${shipName(ship)} is wrecked but fights on until the end of combat!`);
+    return;
+  }
   if (state.phase === 'combat' && state.combatSkill === effectiveSkill(state, ship) && !ship.round.attacked) {
     ship.pendingDestroy = true; // simultaneous attack rule
     log(state, `${shipName(ship)} is crippled but still gets to fire this round.`);
@@ -93,7 +130,7 @@ export function checkDestroyed(state, ship) {
 
 export function destroyShip(state, ship, reason = 'destroyed') {
   if (ship.destroyed) return;
-  ship.destroyed = true; ship.pendingDestroy = false;
+  ship.destroyed = true; ship.pendingDestroy = false; ship.delayedDestroy = false;
   if (reason === 'fled') ship.fled = true;
   for (const s of shipList(state)) if (s.lockOn === ship.id) s.lockOn = null;
   ship.lockOn = null;
@@ -120,3 +157,11 @@ export function checkVictory(state) {
   state.prompt = null;
   log(state, `${state.players[state.winner].name} wins!`);
 }
+
+export const steps = {
+  flipFaceup(state, s) {
+    const ship = state.ships[s.ship];
+    if (s.payer) { const p = state.ships[s.payer]; if (p.tokens.focus < 1) return; p.tokens.focus--; }
+    if (!ship.destroyed) flipFaceup(state, ship, s.uids);
+  },
+};

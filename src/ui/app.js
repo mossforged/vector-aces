@@ -122,7 +122,7 @@ class App {
     $('#status').innerHTML = st.winner ? `<b>${esc(st.players[st.winner].name)} wins</b>`
       : `<span>Round ${st.round || '–'}</span><span>${phaseName(st)}</span>${waiting.map(p => `<span class="pill" style="--fc:${FACTIONS[p].color}">${esc(st.players[p].name)}${s.controls(p) ? ' (you)' : ''}</span>`).join('')}`;
     const rolling = this.roller.cursor - performance.now();
-    if (st.prompt && /^mod(Attack|Defense)$/.test(st.prompt.kind) && rolling > 50) {
+    if (st.prompt && /^(mod|attackPrep|onHit)/.test(st.prompt.kind) && rolling > 50) {
       $('#prompt').innerHTML = '<div class="phase-title">Combat</div><p class="muted">Rolling dice…</p>';
       clearTimeout(this._promptTimer);
       this._promptTimer = setTimeout(() => this.render(), rolling);

@@ -35,11 +35,12 @@ function card(state, s, selected) {
       </div>
     </div>
     ${s.destroyed ? `<div class="dead-tag">${s.fled ? 'Fled' : 'Destroyed'}</div>` : `
-    <div class="bars">${pips(s.shields, 'shd')}${pips(hullLeft, 'hul')}${pips(ch.hull - hullLeft, 'lost')}</div>
+    <div class="bars">${pips(s.shields, 'shd')}${pips(Math.max(0, Q.stat(state, s, 'maxShields') - s.shields), 'lost')}${pips(hullLeft, 'hul')}${pips(ch.hull - hullLeft, 'lost')}</div>
     <div class="tokens">
       ${s.tokens.focus ? `<span class="tok focus">Focus ×${s.tokens.focus}</span>` : ''}
       ${s.tokens.evade ? `<span class="tok evade">Evade ×${s.tokens.evade}</span>` : ''}
       ${s.stress ? `<span class="tok stress">Stress ×${s.stress}</span>` : ''}
+      ${s.ion ? `<span class="tok ion">Ion ×${s.ion}</span>` : ''}
       ${lock ? `<span class="tok lock">Lock → ${esc(Q.shipName(lock))}</span>` : ''}
       ${s.round.revealed ? `<span class="tok man">Flew ${s.round.revealed}</span>` : ''}
     </div>

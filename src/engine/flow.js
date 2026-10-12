@@ -47,3 +47,24 @@ export function advance(state) {
     fn(state, step);
   }
 }
+
+/**
+ * Generic choice prompt with a continuation: when the player picks an option,
+ * `then` is pushed as the next step with `choice` (the option id) added.
+ * A "skip" option is added unless skip === false.
+ */
+export function pick(state, { player, ship = null, kind = 'pick', text, options, then, skip = 'Skip' }) {
+  if (!options.length) return;
+  ask(state, {
+    player, ship, kind, text,
+    options: skip ? [...options, { id: 'skip', label: skip }] : options,
+    onChoose: 'pick', data: { then },
+  });
+}
+
+CHOICES.pick = (state, data, choice) => {
+  if (choice !== 'skip') push(state, { ...data.then, choice });
+};
+
+/** Step descriptor for a card-defined step (see engine/cards). */
+export const cardStep = (card, name, data = {}) => ({ t: `card:${card}:${name}`, ...data });

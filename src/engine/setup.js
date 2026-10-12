@@ -8,12 +8,21 @@ import { CONFIG, ASTEROIDS } from '../data/config.js';
 import { shuffle, nextRandom, seedFromString } from './rng.js';
 import { push, enqueue, ask, log, RuleError } from './flow.js';
 import { basePolygon, placeShape, polygonsIntersect, polygonInsideBoard, distanceToEdge } from './geometry.js';
-import { shipList, pilot, obstaclePolys, overlapsAnyShip, effectiveSkill, shipName } from './queries.js';
+import { shipList, pilot, obstaclePolys, overlapsAnyShip, effectiveSkill, shipName, stat } from './queries.js';
 
-export const ENGINE_VERSION = 1;
+export const ENGINE_VERSION = 2;
 
 export function squadPoints(squad) {
   return squad.reduce((n, e) => n + PILOTS[e.pilot].cost + (e.upgrades || []).reduce((m, u) => m + UPGRADES[u].cost, 0), 0);
+}
+
+/** Upgrade ids a pilot could legally equip in some slot (ignores uniqueness and points). */
+export function upgradeAllowed(pilotId, upgradeId) {
+  const p = PILOTS[pilotId], u = UPGRADES[upgradeId], ch = SHIPS[p.ship];
+  if (u.faction && u.faction !== ch.faction) return false;
+  if (u.ships && !u.ships.includes(p.ship)) return false;
+  if (u.sizes && !u.sizes.includes(ch.size)) return false;
+  return p.slots.includes(u.slot);
 }
 
 /** Returns a list of human-readable problems with a squad (empty = legal). */
@@ -26,11 +35,13 @@ export function validateSquad(faction, squad, pointLimit = Infinity) {
     if (!p) { errs.push(`Unknown pilot ${e.pilot}`); continue; }
     const ch = SHIPS[p.ship];
     if (ch.faction !== faction) errs.push(`${p.name} is not a ${FACTIONS[faction].short} pilot.`);
-    const names = [p.unique ? p.name : null, ...(e.upgrades || []).map(u => (UPGRADES[u].unique ? UPGRADES[u].name : null))].filter(Boolean);
+    const names = [p.unique ? p.name : null, ...(e.upgrades || []).map(u => (UPGRADES[u]?.unique ? UPGRADES[u].name : null))].filter(Boolean);
     for (const n of names) { if (uniques.has(n)) errs.push(`Only one "${n}" allowed.`); uniques.add(n); }
-    const slots = [...ch.slots, ...(p.elite ? ['elite'] : [])];
+    const slots = p.slots.slice();
     for (const u of e.upgrades || []) {
       const def = UPGRADES[u];
+      if (!def) { errs.push(`Unknown upgrade ${u}`); continue; }
+      if (!upgradeAllowed(e.pilot, u)) { errs.push(`${def.name} can't be fitted to ${p.name}.`); continue; }
       const i = slots.indexOf(def.slot);
       if (i < 0) errs.push(`${p.name} has no free ${def.slot} slot for ${def.name}.`); else slots.splice(i, 1);
     }
@@ -69,7 +80,7 @@ export function createGame(opts) {
     planning: { submitted: {} },
     attack: null,
     combatSkill: null,
-    queue: [], prompt: null,
+    queue: [], prompt: null, uid: 1, skillOverride: {},
     log: [], events: [],
     winner: null,
     options: { obstacles: !!opts.obstacles },
@@ -88,13 +99,14 @@ export function createGame(opts) {
         id, owner: p, pilot: e.pilot, chassis: pd.ship,
         tag: counts[e.pilot] > 1 ? seen[e.pilot] : null,
         upgrades: (e.upgrades || []).map(u => ({ id: u, discarded: false })),
-        shields: SHIPS[pd.ship].shields,
+        shields: 0, ion: 0,
         damage: [], stress: 0, tokens: { focus: 0, evade: 0 },
         lockOn: null,
         pose: null, deployed: false, destroyed: false, pendingDestroy: false, fled: false,
         round: freshRound(),
       };
       state.shipOrder.push(id);
+      state.ships[id].shields = stat(state, state.ships[id], 'maxShields');
     }
   }
 
@@ -113,7 +125,7 @@ export function createGame(opts) {
 }
 
 export function freshRound() {
-  return { actionsUsed: [], skipAction: false, agilityBonus: 0, deadeye: false, attacked: false, revealed: null };
+  return { actionsUsed: [], skipAction: false, agilityBonus: 0, attackBonus: 0, deadeye: false, attacked: false, revealed: null, maneuver: null };
 }
 
 // ---------------- obstacles ----------------

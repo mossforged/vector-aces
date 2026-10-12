@@ -14,9 +14,10 @@ import * as setup from './setup.js';
 import * as activation from './activation.js';
 import * as actions from './actions.js';
 import * as combat from './combat.js';
+import * as damage from './damage.js';
 import { log } from './flow.js';
 
-for (const mod of [setup, activation, actions, combat]) register(mod);
+for (const mod of [setup, activation, actions, combat, damage]) register(mod);
 
 export function newGame(opts) {
   const state = setup.createGame(opts);
@@ -66,7 +67,8 @@ export function waitingOn(state) {
   return [state.prompt.player];
 }
 
-export { squadPoints, validateSquad, deployZone, ENGINE_VERSION } from './setup.js';
+export { squadPoints, validateSquad, upgradeAllowed, deployZone, ENGINE_VERSION } from './setup.js';
+export { needsDial } from './activation.js';
 export { availableActions } from './actions.js';
 export { attackOptions } from './combat.js';
 export * as Q from './queries.js';

@@ -1,15 +1,19 @@
 // Round structure: Planning → Activation → (combat.js) → End.
+// Activation per ship (lowest skill first):
+//   ionized? fly a white 1-straight, no reveal
+//   else: before-reveal effects → reveal (+ on-reveal effects) → stress check → move
+//   move → obstacles / bumps → stress → after-maneuver effects → action step
 import { dialFor, parseManeuver, SHIPS } from '../data/ships.js';
 import { push, ask, log, emit, RuleError } from './flow.js';
-import { buildPath, samplePath } from './maneuvers.js';
+import { buildPath } from './maneuvers.js';
 import { basePolygon, polygonInsideBoard, polygonsIntersect, closestPoints } from './geometry.js';
 import { rollFace } from './dice.js';
 import { sufferDamage, destroyShip } from './damage.js';
 import { freshRound } from './setup.js';
-import { afterManeuver } from './abilities.js';
+import { ownSteps, everyone, flag } from './hooks.js';
+import { addStress } from './effects.js';
 import {
-  liveShips, shipName, chassis, enemyOf, effectiveSkill, maneuverColor,
-  hasFaceup, obstaclePolys, shipPoly, shipList,
+  liveShips, shipName, chassis, enemyOf, effectiveSkill, maneuverColor, hasFaceup, obstaclePolys, shipPoly, shipList,
 } from './queries.js';
 
 /** Ships in pilot-skill order; ties: initiative player first, then squad order. */
@@ -19,9 +23,12 @@ export function skillOrder(state, dir = 1) {
     dir * (effectiveSkill(state, a) - effectiveSkill(state, b)) || ini(a.owner) - ini(b.owner) || state.shipOrder.indexOf(a.id) - state.shipOrder.indexOf(b.id));
 }
 
+/** Ships that need a dial this round (ionized ships fly a forced maneuver instead). */
+export const needsDial = s => !(s.ion > 0);
+
 /** Validate a player's dial choices: one legal maneuver per live ship they own. */
 export function validateDials(state, player, dials) {
-  for (const s of liveShips(state).filter(x => x.owner === player)) {
+  for (const s of liveShips(state).filter(x => x.owner === player && needsDial(x))) {
     const key = dials?.[s.id];
     if (!key || !SHIPS[s.chassis].dial.some(c => c.startsWith(key + ':'))) throw new RuleError(`No legal maneuver chosen for ${shipName(s)}.`);
   }
@@ -32,7 +39,7 @@ export function submitDials(state, player, dials) {
   if (state.planning.submitted[player]) throw new RuleError('Dials already submitted.');
   validateDials(state, player, dials);
   state.planning.submitted[player] = true;
-  for (const s of liveShips(state).filter(x => x.owner === player)) state.dials[s.id] = dials[s.id];
+  for (const s of liveShips(state).filter(x => x.owner === player && needsDial(x))) state.dials[s.id] = dials[s.id];
   log(state, `${state.players[player].name} locks in their dials.`);
   if (state.playerOrder.every(p => state.planning.submitted[p] || !liveShips(state).some(s => s.owner === p))) {
     state.prompt = null;
@@ -40,9 +47,8 @@ export function submitDials(state, player, dials) {
   }
 }
 
-function maneuverFor(ship, key) {
-  return dialFor(ship.chassis).find(m => m.key === key);
-}
+const ION_MANEUVER = { key: '1S', speed: 1, bearing: 'S', color: 'w' };
+const maneuverFor = (ship, key) => dialFor(ship.chassis).find(m => m.key === key);
 
 export const steps = {
   startRound(state) {
@@ -50,6 +56,7 @@ export const steps = {
     state.phase = 'planning';
     state.dials = {};
     state.planning = { submitted: {} };
+    state.skillOverride = {};
     for (const s of shipList(state)) s.round = freshRound();
     log(state, `— Round ${state.round} —`);
     ask(state, {
@@ -67,23 +74,45 @@ export const steps = {
   activate(state, s) {
     const ship = state.ships[s.ship];
     if (ship.destroyed) return;
+    if (ship.ion > 0) {
+      ship.round.revealed = '1S';
+      log(state, `${shipName(ship)} is ionized and drifts forward.`);
+      push(state, { t: 'move', ship: ship.id, key: '1S', color: 'w', ion: true });
+      return;
+    }
+    push(state, ...ownSteps(state, ship, 'beforeReveal'), { t: 'reveal', ship: ship.id });
+  },
+
+  reveal(state, s) {
+    const ship = state.ships[s.ship];
+    if (ship.destroyed) return;
     const m = maneuverFor(ship, state.dials[ship.id]);
     ship.round.revealed = m.key;
+    ship.round.maneuver = { key: m.key, color: maneuverColor(state, ship, m) };
     emit(state, { type: 'reveal', ship: ship.id, key: m.key });
-    if (ship.stress > 0 && maneuverColor(state, ship, m) === 'r') {
+    push(state, ...ownSteps(state, ship, 'onReveal', m), { t: 'stressCheck', ship: ship.id });
+  },
+
+  stressCheck(state, s) {
+    const ship = state.ships[s.ship];
+    if (ship.destroyed) return;
+    const mv = ship.round.maneuver;
+    if (ship.stress > 0 && mv.color === 'r') {
       const opp = enemyOf(state, ship.owner);
-      const opts = dialFor(ship.chassis).filter(x => maneuverColor(state, ship, x) !== 'r').map(x => ({ id: x.key, label: x.key, maneuver: x }));
+      const opts = dialFor(ship.chassis).filter(x => maneuverColor(state, ship, x) !== 'r')
+        .map(x => ({ id: x.key, label: x.key, maneuver: { ...x, color: maneuverColor(state, ship, x) } }));
       log(state, `${shipName(ship)} is stressed and revealed a red maneuver — opponent picks a replacement.`);
       ask(state, { player: opp, kind: 'overrideManeuver', ship: ship.id, text: `${shipName(ship)} is stressed: choose a non-red maneuver for it.`, options: opts, onChoose: 'overrideManeuver', data: { ship: ship.id } });
       return;
     }
-    push(state, { t: 'move', ship: ship.id, key: m.key });
+    push(state, { t: 'move', ship: ship.id, key: mv.key, color: mv.color });
   },
 
   move(state, s) {
     const ship = state.ships[s.ship];
-    const m = maneuverFor(ship, s.key);
-    const color = maneuverColor(state, ship, m);
+    if (ship.destroyed) return;
+    const m = s.ion ? ION_MANEUVER : maneuverFor(ship, s.key);
+    const color = s.color ?? maneuverColor(state, ship, m);
     const size = chassis(ship).size;
     state.touches = state.touches.filter(([a, b]) => a !== ship.id && b !== ship.id);
 
@@ -113,11 +142,12 @@ export const steps = {
 
     if (!polygonInsideBoard(basePolygon(final, size))) { destroyShip(state, ship, 'fled'); return; }
 
-    const obs = obstaclePolys(state);
+    const obs = ship.round.ignoreObstacles ? [] : obstaclePolys(state);
     const tpl = bumped.length ? null : path.templatePoly;
     const hitObstacle = obs.some(o => polygonsIntersect(basePolygon(final, size), o) || (tpl && polygonsIntersect(tpl, o)));
 
-    if (color === 'r') ship.stress++;
+    if (s.ion) { ship.ion = 0; }
+    if (color === 'r') addStress(state, ship);
     if (color === 'g' && ship.stress > 0) ship.stress--;
     if (bumped.length || hitObstacle) ship.round.skipAction = true;
 
@@ -125,7 +155,7 @@ export const steps = {
     if (hitObstacle) after.push({ t: 'obstacleHit', ship: ship.id });
     if ((bumped.length || hitObstacle) && hasFaceup(ship, 'dazed')) after.push({ t: 'simpleDamage', ship: ship.id, hits: 1, why: 'Dazed' });
     if (color === 'r' && hasFaceup(ship, 'hull_breach')) after.push({ t: 'rollForDamage', ship: ship.id, why: 'Hull Breach' });
-    after.push(...afterManeuver(state, ship, color, { blocked: ship.round.skipAction }));
+    after.push(...ownSteps(state, ship, 'afterManeuver', color, { blocked: ship.round.skipAction, bumped: bumped.length > 0 }));
     push(state, ...after, { t: 'actionStep', ship: ship.id });
   },
 
@@ -149,22 +179,25 @@ export const steps = {
     log(state, `${s.why}: ${shipName(ship)} rolls ${f}.`);
     if (f === 'hit') sufferDamage(state, ship, 1, 0);
   },
-  repairDrone(state, s) {
-    const ship = state.ships[s.ship];
-    ship.shields++;
-    log(state, `${shipName(ship)}'s Repair Drone restores a shield.`);
-  },
 
   endPhase(state) {
     state.phase = 'end';
-    for (const s of shipList(state)) { s.tokens.focus = 0; s.tokens.evade = 0; }
+    push(state, ...everyone(state, 'endPhase'), { t: 'endCleanup' });
+  },
+  endCleanup(state) {
+    for (const s of shipList(state)) {
+      if (!flag(state, s, 'keepFocus')) s.tokens.focus = 0;
+      s.tokens.evade = 0;
+    }
     push(state, { t: 'startRound' });
   },
 };
 
 export const choices = {
   overrideManeuver(state, data, choice) {
-    push(state, { t: 'move', ship: data.ship, key: choice });
+    const ship = state.ships[data.ship];
+    const m = maneuverFor(ship, choice);
+    push(state, { t: 'move', ship: data.ship, key: choice, color: maneuverColor(state, ship, m) });
   },
 };
 

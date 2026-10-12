@@ -45,3 +45,29 @@ export function botAction(state, player, rng = Math.random) {
   if (!pick) pick = opts[Math.floor(rand(rng) * opts.length)];
   return { type: 'CHOOSE', player, choice: pick.id };
 }
+
+/** A random legal squad (≤ limit points), filling upgrade slots at random. */
+export async function randomSquad(faction, rng = Math.random, limit = 100) {
+  const { PILOTS } = await import('../data/pilots.js');
+  const { UPGRADES } = await import('../data/upgrades.js');
+  const { validateSquad, upgradeAllowed, squadPoints } = await import('../engine/index.js');
+  const pilots = Object.values(PILOTS).filter(p => SHIPS[p.ship].faction === faction);
+  const pickOne = arr => arr[Math.floor(rng() * arr.length)];
+  for (let tries = 0; tries < 200; tries++) {
+    const squad = [];
+    for (let i = 0; i < 8; i++) {
+      const p = pickOne(pilots);
+      const e = { pilot: p.id, upgrades: [] };
+      const free = p.slots.slice();
+      for (const slot of free) {
+        if (rng() < 0.35) continue;
+        const opts = Object.values(UPGRADES).filter(u => u.slot === slot && upgradeAllowed(p.id, u.id));
+        if (opts.length) e.upgrades.push(pickOne(opts).id);
+      }
+      squad.push(e);
+      if (validateSquad(faction, squad, limit).length) { squad.pop(); if (squadPoints(squad) > limit - 12) break; }
+    }
+    if (squad.length && !validateSquad(faction, squad, limit).length) return squad;
+  }
+  return [{ pilot: pilots[0].id, upgrades: [] }];
+}

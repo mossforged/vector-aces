@@ -235,3 +235,18 @@ label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--t
 .tt-ability { margin: 0; font-style: italic; color: #c8d0dc; }
 .tt-actions { color: var(--muted); }
 .tt-ups li b { color: var(--text); } .tt-ups li { color: var(--muted); } .tt-ups li.gone { text-decoration: line-through; opacity: .55; }
+
+/* squad builder: ship picker */
+.sb-tools { display: flex; gap: 6px; align-items: center; }
+.sb-ships { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; margin: 4px 0 8px; }
+.sb-ship { text-align: left; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.sb-ship:hover, .sb-ship.on { border-color: var(--fc); }
+.sb-ship.on { box-shadow: inset 0 0 0 1px var(--fc); }
+.sb-ship small { color: var(--muted); font-size: 10.5px; }
+.sb-stats { display: flex; gap: 6px; font-family: var(--display); font-weight: 700; font-size: 12px; }
+.sb-stats i { font-style: normal; } .sb-stats .atk { color: var(--atk); } .sb-stats .agi { color: var(--agi); } .sb-stats .hul { color: var(--hull); } .sb-stats .shd { color: var(--shield); }
+.sb-add { margin-bottom: 4px; }
+.sb-list select:disabled { opacity: .5; }
+.tok.ion { color: #9fb8ff; }
+.tag.ion { background: #1d2a55; color: #9fb8ff; font-size: 11px; padding: 1px 6px; border-radius: 4px; }
+.dial.ionized { border-style: dashed; }
