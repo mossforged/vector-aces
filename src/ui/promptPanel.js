@@ -75,7 +75,7 @@ export function renderPrompt(el, app) {
       ? { kind: 'deploy', ship, zone: deployZone(st, ship.owner), defaultHeading: st.players[ship.owner].edge === 'bottom' ? 0 : Math.PI }
       : { kind: 'obstacle', shape: p.data.shape });
     board.setHighlight({});
-    el.innerHTML = `${head}<p class="hint">Click the table to place · mouse wheel or Q / E to rotate.</p>
+    el.innerHTML = `${head}<p class="hint">Click the table to place · Q / E (or shift+wheel) rotates.</p>
       <div class="opts">${p.options.map(o => `<button class="btn" data-o="${o.id}">${esc(o.label)}</button>`).join('')}</div>`;
     bindOptions(el, app, p);
     return;

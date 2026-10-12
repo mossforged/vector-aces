@@ -21,8 +21,9 @@ src/engine/    PURE RULES. deterministic reducer; no DOM, no network. Public API
   abilities.js   pilot/upgrade hooks                   queries.js    read-only helpers (UI uses these too)
   geometry.js    polygons, arcs, range                 maneuvers.js  template paths, barrel rolls
   dice.js, rng.js
-src/render/    board.js (canvas table + animation), shipArt.js (vector standees / image overrides)
-src/ui/        app.js (shell), lobby.js, squadBuilder.js, promptPanel.js, dialPicker.js, shipCards.js, diceTray.js, logPanel.js, glyphs.js
+src/render/    camera.js (isometric projection: rotate/tilt/zoom/pan), board.js (draws the table, minis on pegs, animation), shipArt.js (vector art / image overrides)
+src/ui/        app.js (shell), lobby.js, squadBuilder.js, promptPanel.js, dialPicker.js, shipCards.js, shipTooltip.js (hover card),
+               diceRoller.js (animated on-board dice), diceTray.js (sidebar record), logPanel.js, glyphs.js
 src/net/       session.js (ordered log → engine, secret dials), transports.js (local + Firebase), firebaseConfig.js
 src/ai/        simpleBot.js (test driver / future computer opponent)
 tests/         run.mjs (engine + 500 simulated games), net.mjs (two clients stay in sync)

@@ -66,6 +66,7 @@ function resolveFaceup(state, ship, idx) {
     case 'minor_explosion': {
       c.faceup = false;
       const f = rollFace(state, 'attack');
+      emit(state, { type: 'roll', ship: ship.id, faces: [f], reason: 'Minor Explosion' });
       log(state, `Minor explosion roll: ${f}.`);
       if (f === 'hit') sufferDamage(state, ship, 1, 0);
       break;

@@ -63,6 +63,7 @@ export const steps = {
     for (const s of liveShips(state)) {
       if (hasFaceup(s, 'console_blaze')) {
         const f = rollFace(state, 'attack');
+        emit(state, { type: 'roll', ship: s.id, faces: [f], reason: 'Console Blaze' });
         log(state, `Console Blaze: ${shipName(s)} rolls ${f}.`);
         if (f === 'hit') sufferDamage(state, s, 1, 0);
       }
@@ -102,7 +103,7 @@ export const steps = {
     n += AB.attackDiceBonus(state, a);
     if (hasFaceup(atk, 'blinded')) { n = 0; flipFacedown(state, atk, 'blinded'); log(state, `${shipName(atk)} is blinded and fires wild!`); }
     a.attackDice = rollDice(state, 'attack', Math.max(0, n));
-    emit(state, { type: 'attackDice', dice: a.attackDice.map(d => d.face) });
+    emit(state, { type: 'attackDice', dice: a.attackDice.map(d => ({ ...d })), roll: true, attacker: a.attacker, defender: a.defender, band: a.band, weapon: a.weapon, obstructed: a.obstructed });
     log(state, `${shipName(atk)} attacks ${shipName(def)} at Range ${a.band}: rolls ${a.attackDice.map(d => d.face).join(', ') || 'nothing'}.`);
   },
 
@@ -119,7 +120,7 @@ export const steps = {
     if (a.weapon === 'primary' && a.band === 3) n += 1;
     if (a.obstructed) n += 1;
     a.defenseDice = rollDice(state, 'defense', n);
-    emit(state, { type: 'defenseDice', dice: a.defenseDice.map(d => d.face) });
+    emit(state, { type: 'defenseDice', dice: a.defenseDice.map(d => ({ ...d })), roll: true });
     log(state, `${shipName(def)} rolls ${a.defenseDice.map(d => d.face).join(', ') || 'no'} defense dice.`);
   },
 
@@ -173,7 +174,7 @@ export const choices = {
       case 'focus': changeFaces(a.attackDice, 'focus', 'hit'); atk.tokens.focus--; a.used.push('focus'); break;
       default: if (!AB.applyAttackMod(state, a, choice)) throw new RuleError('unknown modifier');
     }
-    emit(state, { type: 'attackDice', dice: a.attackDice.map(d => d.face) });
+    emit(state, { type: 'attackDice', dice: a.attackDice.map(d => ({ ...d })), mod: choice });
     push(state, { t: 'modAttack' });
   },
 
@@ -185,7 +186,7 @@ export const choices = {
       case 'devade': a.defenseDice.push({ face: 'evade', rerolled: false, added: true }); def.tokens.evade--; a.used.push('devade'); break;
       default: if (!AB.applyDefenseMod(state, a, choice)) throw new RuleError('unknown modifier');
     }
-    emit(state, { type: 'defenseDice', dice: a.defenseDice.map(d => d.face) });
+    emit(state, { type: 'defenseDice', dice: a.defenseDice.map(d => ({ ...d })), mod: choice });
     push(state, { t: 'modDefense' });
   },
 };

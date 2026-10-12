@@ -90,13 +90,26 @@ Hotseat uses the same Session with `me = 'both'` (no commit step; the UI does a 
 screen instead).
 
 ## 3. Render (src/render)
-`BoardView` draws in table millimetres (a transform maps to pixels and flips the table so the
-viewer's edge is at the bottom). It animates `move` events along the sampled template path, and
-shows hit/shield/crit flashes and laser lines from `damage`/`shield`/`attackResult` events.
+`camera.js` is an orthographic "isometric" camera. Because the table is flat, tilt + rotation of
+the ground plane is a single 2D affine matrix, so everything on the table (mat, zones, arcs,
+templates, bases, range lines) is still drawn in table millimetres with
+`ctx.setTransform(...camera.matrix())`. Things above the table use `camera.matrix(liftMm)` or
+`camera.project(x, y, liftMm)`: asteroids are extruded slices, ships are flat minis floating on a
+peg `FLY` mm above their base, labels are drawn upright in screen space. Tall objects are sorted
+back-to-front by projected depth. Input: drag rotates/tilts, wheel zooms about the cursor,
+right/shift-drag pans; `camera.unproject` turns clicks back into table coordinates.
+
+`BoardView` animates `move` events along the sampled template path, and shows hit/shield/crit
+rings, laser bolts and explosions from `damage`/`shield`/`attackResult`/`destroyed` events.
 Ship art is a function per `art` key in `shipArt.js`; set `IMAGE_OVERRIDES[key] = 'assets/x.png'`
 to use a picture instead (standee approach — one image, moved and rotated).
 
 ## 4. UI (src/ui)
+`diceRoller.js` turns `attackDice`/`defenseDice`/`attackResult`/`roll` events into the on-board
+dice mat (tumble on roll and reroll, flash on change, drop-in for added dice). It keeps a timeline
+`cursor`; app.js holds back modify-dice prompts until the dice have landed. `shipTooltip.js`
+renders the hover card from the same `Q.*` queries as the ship cards.
+
 `app.js` subscribes to the Session and re-renders panels on every change. Each panel is a function
 `render(el, {...})` that rewrites its container — simple, stateless, and easy to restyle. Transient
 UI state (selected ship, draft dials, hotseat hand-off) lives in `app.ui`.

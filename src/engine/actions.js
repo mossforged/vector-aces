@@ -83,8 +83,8 @@ export function performAction(state, ship, id) {
         const def = DAMAGE_CARDS[card];
         if (def.repairAlways) { flipFacedown(state, ship, card); break; }
         const f = rollFace(state, 'attack');
-        emit(state, { type: 'roll', ship: ship.id, faces: [f] });
         const ok = f === 'hit' || (card === 'weapons_fault' && f === 'crit');
+        emit(state, { type: 'roll', ship: ship.id, faces: [f], reason: `Repair: ${def.name}`, success: ok });
         log(state, `${shipName(ship)} attempts repairs: rolled ${f}.`);
         if (ok) flipFacedown(state, ship, card);
         break;

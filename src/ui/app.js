@@ -9,6 +9,8 @@ import { renderShipCards } from './shipCards.js';
 import { renderDiceTray } from './diceTray.js';
 import { renderLog } from './logPanel.js';
 import { esc } from './glyphs.js';
+import { DiceRoller } from './diceRoller.js';
+import { renderShipTooltip, placeTooltip } from './shipTooltip.js';
 
 const $ = sel => document.querySelector(sel);
 
@@ -18,8 +20,13 @@ class App {
     this.ui = { selected: null, drafts: {}, handoffFor: null };
     this.board = new BoardView($('#board'), {
       onShipClick: id => this.select(id),
-      onHover: () => {},
+      onHover: (id, x, y) => this._hover(id, x, y),
       onPlace: pos => this._place(pos),
+    });
+    this.roller = new DiceRoller($('#dicemat'));
+    document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => {
+      const c = this.board.camera, k = b.dataset.cam;
+      if (k === 'left') c.spin(Math.PI / 4); else if (k === 'right') c.spin(-Math.PI / 4); else this.board.setView(k);
     });
     $('#btn-lobby').onclick = () => this.confirm('Leave this battle? Same-screen games can be resumed from the lobby.', 'Leave', () => this.backToLobby());
     $('#btn-concede').onclick = () => this._concede();
@@ -35,10 +42,11 @@ class App {
     this.session.onChange(s => {
       const fresh = s.state !== this.state;
       this.state = s.state;
-      if (this.state && fresh) this.board.setState(this.state, s.lastEvents);
+      if (this.state && fresh) { this.board.setState(this.state, s.lastEvents); this.roller.update(this.state, s.lastEvents); }
       this.render();
     });
     this.board.setViewer(me === 'both' || me === 'spectator' ? null : me);
+    this.board.setView('iso');
     this.state = this.session.state;
     if (this.state) this.board.setState(this.state, []);
     this.render();
@@ -52,6 +60,13 @@ class App {
   }
 
   act(action) { return this.session.act(action); }
+
+  _hover(id, x, y) {
+    const tip = $('#tooltip');
+    if (!id || !this.state) { tip.hidden = true; this.ui.hover = null; return; }
+    if (this.ui.hover !== id || tip.hidden) { renderShipTooltip(tip, this.state, id); this.ui.hover = id; }
+    placeTooltip(tip, $('.table'), x, y);
+  }
 
   select(id, toggle = true) {
     this.ui.selected = toggle && this.ui.selected === id ? null : id;
@@ -106,7 +121,13 @@ class App {
     const waiting = waitingOn(st);
     $('#status').innerHTML = st.winner ? `<b>${esc(st.players[st.winner].name)} wins</b>`
       : `<span>Round ${st.round || '–'}</span><span>${phaseName(st)}</span>${waiting.map(p => `<span class="pill" style="--fc:${FACTIONS[p].color}">${esc(st.players[p].name)}${s.controls(p) ? ' (you)' : ''}</span>`).join('')}`;
-    renderPrompt($('#prompt'), this);
+    const rolling = this.roller.cursor - performance.now();
+    if (st.prompt && /^mod(Attack|Defense)$/.test(st.prompt.kind) && rolling > 50) {
+      $('#prompt').innerHTML = '<div class="phase-title">Combat</div><p class="muted">Rolling dice…</p>';
+      clearTimeout(this._promptTimer);
+      this._promptTimer = setTimeout(() => this.render(), rolling);
+    } else renderPrompt($('#prompt'), this);
+    if (this.ui.hover && !$('#tooltip').hidden) renderShipTooltip($('#tooltip'), st, this.ui.hover);
     renderDiceTray($('#dice'), { state: st });
     renderShipCards($('#cards'), { state: st, me: this._viewer(), selected: this.ui.selected, onSelect: x => this.select(x) });
     renderLog($('#log'), { state: st, chat: s.chat });

@@ -47,19 +47,21 @@ Fix rules gaps and edge cases (see `docs/RULES_COVERAGE.md` ◐/⬜ items).
 
 ## D. Board look & animation
 Make the table prettier: art, effects, camera, readability.
-- **Read:** `src/render/board.js`, `src/render/shipArt.js`, `src/data/factions.js`
+- **Read:** `src/render/camera.js` (projection math), `src/render/board.js`, `src/render/shipArt.js`, `src/data/factions.js`
 - **Interface:** `BoardView` public methods (`setState`, `setViewer`, `setHighlight`, `setPlacement`,
   `setSelected`) and engine events (`move`, `destroyed`, `damage`, `shield`, `attackResult`, `lock`,
   `reveal`, `roll`, `attackDice`, `defenseDice`).
 - **Standees:** drop top-down PNGs in `assets/` and set `IMAGE_OVERRIDES` in `shipArt.js`.
-- **Ideas:** zoom/pan, show the executed template briefly after each move, range-ruler drag tool,
-  engine trails, explosion sprite, nebula background image.
+- **Ideas:** show the executed template briefly after each move, range-ruler drag tool,
+  engine trails, explosion sprites, background image, upright standee images, a Three.js renderer
+  that implements the same BoardView API (the camera/board split makes that a drop-in swap).
 
 ## E. Panels & UX
 Lobby, dial picker, ship cards, dice tray, log, help, mobile layout.
 - **Read:** `src/ui/app.js` + the one panel you're changing, `css/main.css`
 - **Interface:** panels are `render(el, {state, ...})` functions; they read state through `Q.*`.
-- **Ideas:** animated dice rolls, sound effects, "your turn" browser notification/tab title,
+- **Also owns:** `diceRoller.js` (on-board dice), `shipTooltip.js` (hover card).
+- **Ideas:** sound effects, "your turn" browser notification/tab title,
   keyboard shortcuts, card art, a proper rules screen, chat box (session already supports `chat`).
 
 ## F. Online & hosting

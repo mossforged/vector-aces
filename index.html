@@ -22,7 +22,18 @@
       </nav>
     </header>
     <main class="layout">
-      <section class="table"><canvas id="board"></canvas></section>
+      <section class="table">
+        <canvas id="board"></canvas>
+        <div class="cam-controls" aria-label="Camera">
+          <button class="btn small" data-cam="left" title="Rotate left">⟲</button>
+          <button class="btn small" data-cam="right" title="Rotate right">⟳</button>
+          <button class="btn small" data-cam="iso" title="Isometric view">3D</button>
+          <button class="btn small" data-cam="top" title="Top-down view">Top</button>
+          <span class="cam-hint">drag to rotate · scroll to zoom · right-drag to pan</span>
+        </div>
+        <div id="dicemat" class="dicemat" hidden></div>
+        <div id="tooltip" class="ship-tip" hidden></div>
+      </section>
       <aside class="side">
         <div id="prompt" class="card-panel"></div>
         <div id="dice" class="card-panel tray" hidden></div>
@@ -44,7 +55,8 @@
       <p><b>Dice</b> — attack: ✱ hit, ✸ critical, ◉ focus. Defense: ➚ evade, ◉ focus. Each evade cancels a hit (hits before crits). Damage strips shields first, then deals Damage cards (crits face up). A ship dies when its cards reach its hull.</p>
       <p><b>Collisions</b> — moving into a ship stops you touching it and skips your action; touching ships can't shoot each other. Flying over an asteroid skips your action and rolls 1 attack die for damage; you can't attack while sitting on one. Leaving the table destroys the ship.</p>
       <p><b>Ties</b> — the player with initiative (fewer squad points; Dominion on a tie) moves and shoots first. Ships with the same pilot skill as the attacker still fire before being removed.</p>
-      <p class="muted">Board: each range band is 100 mm on a 914 mm (3′) table. Hover attack buttons to see the range line.</p>
+      <p><b>Camera</b> — drag the table to rotate and tilt, scroll to zoom, right-drag (or shift-drag) to pan. 3D / Top switch views. Hover a ship for its full status; click it to show its firing arc.</p>
+      <p class="muted">Each range band is 100 mm (the faint grid) on a 914 mm (3′) table. Hover attack buttons to see the range line. While placing: Q / E rotates.</p>
     </div>
   </div>
 

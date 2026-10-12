@@ -132,7 +132,7 @@ export const steps = {
   obstacleHit(state, s) {
     const ship = state.ships[s.ship];
     const f = rollFace(state, 'attack');
-    emit(state, { type: 'roll', ship: ship.id, faces: [f] });
+    emit(state, { type: 'roll', ship: ship.id, faces: [f], reason: 'Asteroid impact' });
     log(state, `${shipName(ship)} hits an asteroid and rolls ${f}.`);
     if (f === 'hit') sufferDamage(state, ship, 1, 0);
     if (f === 'crit') sufferDamage(state, ship, 0, 1);
@@ -145,6 +145,7 @@ export const steps = {
   rollForDamage(state, s) {
     const ship = state.ships[s.ship];
     const f = rollFace(state, 'attack');
+    emit(state, { type: 'roll', ship: ship.id, faces: [f], reason: s.why });
     log(state, `${s.why}: ${shipName(ship)} rolls ${f}.`);
     if (f === 'hit') sufferDamage(state, ship, 1, 0);
   },
