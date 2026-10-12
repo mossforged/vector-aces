@@ -50,6 +50,8 @@ export function cardsOf(ship) {
     if (UPGRADES[u.id].slot === 'elite' && !pilotOn) continue;
     out.push(CARDS[u.id]);
   }
+  // Condition cards assigned to this ship (ship.conditions = [{ id, from }]) behave like its own cards.
+  for (const c of ship.conditions || []) if (CARDS[c.id]) out.push(CARDS[c.id]);
   return out;
 }
 

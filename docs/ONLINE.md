@@ -21,7 +21,7 @@ Same-screen play works with no setup. Online play needs two things: the game hos
 
 ## 3. Play
 Host: *Host online game* → pick faction + squad → *Create game* → copy the invite link.
-Friend: opens the link, builds a squad for the other faction, *Join battle*. No accounts needed.
+Friend: opens the link, picks any faction (even the same one) and a squad, *Join battle*. No accounts needed.
 Either player can refresh or reopen the link later — the game is rebuilt from the move log.
 A third person opening a full game can watch as a spectator.
 

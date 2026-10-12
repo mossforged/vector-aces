@@ -33,6 +33,7 @@ export function renderDialPicker(el, { state, ships: all, draft, onChange, onLoc
 function dialBlock(state, ship, chosen) {
   const dial = SHIPS[ship.chassis].dial.map(parseManeuver);
   const speeds = [...new Set(dial.map(m => m.speed))].sort((a, b) => b - a);
+  const cols = BEARINGS.filter(b => ['TL', 'BL', 'S', 'BR', 'TR'].includes(b) || dial.some(m => m.bearing === b));
   const stressed = ship.stress > 0;
   return `
   <div class="dial" data-ship="${ship.id}">
@@ -44,8 +45,8 @@ function dialBlock(state, ship, chosen) {
     </div>
     <div class="dial-grid">
       ${speeds.map(sp => `
-        <div class="dial-row"><span class="sp">${sp}</span>
-          ${BEARINGS.map(b => {
+        <div class="dial-row" style="--cols:${cols.length}"><span class="sp">${sp}</span>
+          ${cols.map(b => {
             const m = dial.find(x => x.speed === sp && x.bearing === b);
             if (!m) return '<span class="cell empty"></span>';
             const color = Q.maneuverColor(state, ship, m);

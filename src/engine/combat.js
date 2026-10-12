@@ -15,7 +15,7 @@ import { skillOrder } from './activation.js';
 import { polygonsIntersect } from './geometry.js';
 import { cardsOf, everyone, foldAll, fold } from './hooks.js';
 import {
-  liveShips, shipName, effectiveSkill, attackGeometry, turretGeometry, hasFaceup, stat, obstaclePolys, shipPoly, hasFlag,
+  liveShips, shipName, effectiveSkill, attackGeometry, frontGeometry, turretGeometry, hasFaceup, stat, obstaclePolys, shipPoly, hasFlag,
 } from './queries.js';
 import { spendFocus, spendLock, attackRerollAllowed, attackFocusAllowed, rerollOptions, once, mark } from './effects.js';
 
@@ -35,7 +35,7 @@ const weaponDef = a => (a.weapon === 'primary' ? {} : CARDS[a.weapon]?.weapon ||
 /** Every legal (target, weapon) choice for `ship`. `only` limits weapons (e.g. ['primary']). */
 export function attackOptions(state, ship, { only = null } = {}) {
   const opts = [];
-  if (ship.noAttackRound === state.round) return opts;
+  if (ship.noAttackRound === state.round || ship.cloaked || ship.disarmed) return opts;
   const touchOk = hasFlag(state, ship, 'attackWhileTouching');
   for (const e of liveShips(state)) {
     if (e.owner === ship.owner) continue;
@@ -49,7 +49,7 @@ export function attackOptions(state, ship, { only = null } = {}) {
     for (const u of ship.upgrades) {
       const w = UPGRADES[u.id].weapon;
       if (u.discarded || !w || (only && !only.includes(u.id))) continue;
-      const geo = w.turret ? turretGeometry(state, ship, e) : g;
+      const geo = w.turret ? turretGeometry(state, ship, e) : frontGeometry(state, ship, e);
       if (!geo || !geo.band || blocked(geo)) continue;
       const [lo, hi] = fold(state, ship, 'weaponRange', [w.minRange, w.maxRange], w);
       if (geo.band < lo || geo.band > hi) continue;
@@ -68,9 +68,9 @@ export function attackOptions(state, ship, { only = null } = {}) {
 function beginAttack(state, ship, opt, extra = {}) {
   const target = state.ships[opt.target];
   const w = opt.weapon === 'primary' ? null : UPGRADES[opt.weapon].weapon;
-  const geo = w?.turret ? turretGeometry(state, ship, target) : attackGeometry(state, ship, target);
+  const geo = !w ? attackGeometry(state, ship, target) : w.turret ? turretGeometry(state, ship, target) : frontGeometry(state, ship, target);
   const a = state.attack = {
-    attacker: ship.id, defender: target.id, weapon: opt.weapon, band: geo.band, obstructed: geo.obstructed, line: geo.line,
+    attacker: ship.id, defender: target.id, weapon: opt.weapon, band: geo.band, obstructed: geo.obstructed, line: geo.line, arc: geo.arc || 'front',
     attackDice: [], defenseDice: [], used: [], bonusDice: 0, hit: false, dealt: [], result: null, ...extra,
   };
   if (w && !a.second) {
@@ -191,7 +191,7 @@ export const steps = {
     const ship = state.ships[s.ship], t = state.ships[s.target];
     if (ship.destroyed || t.destroyed || state.winner) return;
     const w = UPGRADES[s.weapon].weapon;
-    const geo = w.turret ? turretGeometry(state, ship, t) : attackGeometry(state, ship, t);
+    const geo = w.turret ? turretGeometry(state, ship, t) : frontGeometry(state, ship, t);
     if (!geo || !geo.band || geo.band < w.minRange || geo.band > w.maxRange) return;
     log(state, `${shipName(ship)} fires a second volley.`);
     beginAttack(state, ship, { target: t.id, weapon: s.weapon }, { second: true });
@@ -246,6 +246,12 @@ export const steps = {
       if (k === 'h') { const x = Math.min(hc, evades); hc -= x; evades -= x; } else { const x = Math.min(cc, evades); cc -= x; evades -= x; }
     }
     let rh = hc + Math.min(hits, rules.uncancelableHits), rc = cc + Math.min(crits, rules.uncancelableCrits);
+    // Reinforce: an attacker in the reinforced half loses 1 more hit (or crit) if any would land.
+    const def = state.ships[a.defender], atkShip = state.ships[a.attacker];
+    if (def.round.reinforce && rh + rc > 0) {
+      const ahead = (atkShip.pose.x - def.pose.x) * Math.sin(def.pose.h) - (atkShip.pose.y - def.pose.y) * Math.cos(def.pose.h) >= 0;
+      if ((def.round.reinforce === 'fore') === ahead) { if (rh > 0) rh--; else rc--; a.reinforced = true; }
+    }
     a.hit = rh + rc > 0 || hasFlag(state, state.ships[a.attacker], 'alwaysHits');
     const ion = weaponDef(a).ion;
     if (ion && rh + rc > 0) { rh = 1; rc = 0; a.ion = ion; }

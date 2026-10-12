@@ -15,8 +15,8 @@ export function renderPrompt(el, app) {
   const err = session.error ? `<div class="err">${esc(session.error)}</div>` : '';
 
   if (st.winner) {
-    el.innerHTML = `<div class="banner win" style="--fc:${FACTIONS[st.winner].color}">
-      <h2>${esc(st.players[st.winner].name)} wins!</h2><p>${FACTIONS[st.winner].name} control the sector.</p>
+    el.innerHTML = `<div class="banner win" style="--fc:${st.players[st.winner].color}">
+      <h2>${esc(st.players[st.winner].name)} wins!</h2><p>The ${FACTIONS[st.players[st.winner].faction].name} control the sector.</p>
       <button class="btn primary" data-new>New game</button></div>`;
     el.querySelector('[data-new]').onclick = () => app.backToLobby();
     return;
@@ -34,7 +34,7 @@ export function renderPrompt(el, app) {
     }
     const planner = mine[0];
     if (!session.online && ui.handoffFor !== planner) {
-      el.innerHTML = `<div class="handoff" style="--fc:${FACTIONS[planner].color}">
+      el.innerHTML = `<div class="handoff" style="--fc:${st.players[planner].color}">
         <div class="phase-title">Planning · Round ${st.round}</div>
         <h2>Pass to ${esc(st.players[planner].name)}</h2>
         <p>Everyone else, look away while ${esc(st.players[planner].name)} sets their dials.</p>
@@ -44,7 +44,7 @@ export function renderPrompt(el, app) {
     }
     const draft = (ui.drafts[planner] ||= {});
     const ships = Q.liveShips(st).filter(s => s.owner === planner);
-    el.innerHTML = `${err}<div class="phase-title" style="--fc:${FACTIONS[planner].color}">Planning · Round ${st.round} · ${esc(st.players[planner].name)}</div><div data-dials></div>`;
+    el.innerHTML = `${err}<div class="phase-title" style="--fc:${st.players[planner].color}">Planning · Round ${st.round} · ${esc(st.players[planner].name)}</div><div data-dials></div>`;
     renderDialPicker(el.querySelector('[data-dials]'), {
       state: st, ships, draft,
       onChange: () => app.render(),
@@ -61,13 +61,13 @@ export function renderPrompt(el, app) {
   // ---------------- someone else's decision ----------------
   const who = st.players[p.player];
   if (!session.controls(p.player)) {
-    el.innerHTML = `${err}<div class="phase-title">${phaseName(st)}</div><p class="muted">Waiting for <b style="color:${FACTIONS[p.player].color}">${esc(who.name)}</b>…</p><p class="muted small">${esc(p.text)}</p>`;
+    el.innerHTML = `${err}<div class="phase-title">${phaseName(st)}</div><p class="muted">Waiting for <b style="color:${st.players[p.player].color}">${esc(who.name)}</b>…</p><p class="muted small">${esc(p.text)}</p>`;
     board.setHighlight(p.ship ? { ships: [p.ship] } : {});
     return;
   }
 
   // ---------------- my decision ----------------
-  const head = `${err}<div class="phase-title" style="--fc:${FACTIONS[p.player].color}">${phaseName(st)} · ${esc(who.name)}</div><p class="ptext">${esc(p.text)}</p>`;
+  const head = `${err}<div class="phase-title" style="--fc:${st.players[p.player].color}">${phaseName(st)} · ${esc(who.name)}</div><p class="ptext">${esc(p.text)}</p>`;
 
   if (p.kind === 'deploy' || p.kind === 'placeObstacle') {
     const ship = p.ship ? st.ships[p.ship] : null;

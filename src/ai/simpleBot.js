@@ -51,7 +51,7 @@ export async function randomSquad(faction, rng = Math.random, limit = 100) {
   const { PILOTS } = await import('../data/pilots.js');
   const { UPGRADES } = await import('../data/upgrades.js');
   const { validateSquad, upgradeAllowed, squadPoints } = await import('../engine/index.js');
-  const pilots = Object.values(PILOTS).filter(p => SHIPS[p.ship].faction === faction);
+  const pilots = Object.values(PILOTS).filter(p => p.faction === faction);
   const pickOne = arr => arr[Math.floor(rng() * arr.length)];
   for (let tries = 0; tries < 200; tries++) {
     const squad = [];

@@ -9,7 +9,7 @@ export function renderShipCards(el, { state, me, selected, onSelect }) {
   const order = [...state.playerOrder].sort((a, b) => (a === me ? -1 : b === me ? 1 : 0));
   el.innerHTML = order.map(p => `
     <div class="fleet">
-      <h3 style="--fc:${FACTIONS[p].color}">${esc(state.players[p].name)} <small>${FACTIONS[p].short} · ${state.players[p].points} pts${state.initiative === p ? ' · initiative' : ''}</small></h3>
+      <h3 style="--fc:${state.players[p].color}">${esc(state.players[p].name)} <small>${FACTIONS[state.players[p].faction].short} · ${state.players[p].points} pts${state.initiative === p ? ' · initiative' : ''}</small></h3>
       ${Q.shipList(state).filter(s => s.owner === p).map(s => card(state, s, selected)).join('')}
     </div>`).join('');
   el.querySelectorAll('.scard').forEach(c => c.addEventListener('click', () => onSelect?.(c.dataset.ship)));
@@ -23,7 +23,7 @@ function card(state, s, selected) {
   const lock = s.lockOn && state.ships[s.lockOn];
   const pips = (n, cls) => Array.from({ length: n }, () => `<i class="pip ${cls}"></i>`).join('');
   return `
-  <div class="scard ${s.destroyed ? 'dead' : ''} ${selected === s.id ? 'sel' : ''}" data-ship="${s.id}" style="--fc:${FACTIONS[s.owner].color}">
+  <div class="scard ${s.destroyed ? 'dead' : ''} ${selected === s.id ? 'sel' : ''}" data-ship="${s.id}" style="--fc:${state.players[s.owner].color}">
     <div class="scard-top">
       <span class="ps" title="Pilot skill">${Q.effectiveSkill(state, s)}</span>
       <div class="nm"><b>${pl.unique ? '• ' : ''}${esc(Q.shipName(s))}</b><small>${esc(ch.name)}</small></div>

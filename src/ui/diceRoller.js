@@ -48,9 +48,9 @@ export class DiceRoller {
       this._show();
       this.el.innerHTML = `
         <div class="dm-head">
-          <b style="color:${FACTIONS[atk.owner].color}">${esc(Q.shipName(atk))}</b>
+          <b style="color:${state.players[atk.owner].color}">${esc(Q.shipName(atk))}</b>
           <span class="dm-arrow">fires at</span>
-          <b style="color:${FACTIONS[def.owner].color}">${esc(Q.shipName(def))}</b>
+          <b style="color:${state.players[def.owner].color}">${esc(Q.shipName(def))}</b>
           <small>Range ${ev.band} · ${esc(weapon)}${ev.obstructed ? ' · obstructed' : ''}</small>
         </div>
         <div class="dm-row" data-row="attack"><span class="dm-lbl">Attack</span><div class="dm-dice"></div></div>
@@ -104,7 +104,7 @@ export class DiceRoller {
     const ship = state.ships[ev.ship];
     this._at(0, () => {
       this._show();
-      this.el.innerHTML = `<div class="dm-head"><b style="color:${FACTIONS[ship.owner].color}">${esc(Q.shipName(ship))}</b><small>${esc(ev.reason || 'Roll')}</small></div>
+      this.el.innerHTML = `<div class="dm-head"><b style="color:${state.players[ship.owner].color}">${esc(Q.shipName(ship))}</b><small>${esc(ev.reason || 'Roll')}</small></div>
         <div class="dm-row" data-row="${ev.kind === 'defense' ? 'defense' : 'attack'}"><span class="dm-lbl">Roll</span><div class="dm-dice"></div></div><div class="dm-result"></div>`;
       this.rows = { attack: [], defense: [] };
     });

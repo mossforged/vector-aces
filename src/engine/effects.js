@@ -25,10 +25,29 @@ export function spendLock(state, ship) {
   push(state, ...ownSteps(state, ship, 'onSpendLock', target));
 }
 
+/** A jammed ship loses a jam token instead of gaining a focus/evade token or a lock. */
+export function jammed(state, ship) {
+  if (!(ship.jam > 0)) return false;
+  ship.jam--;
+  log(state, `${shipName(ship)} is jammed — the token is lost.`);
+  return true;
+}
+
 export function acquireLock(state, ship, target) {
+  if (jammed(state, ship)) return;
   ship.lockOn = target.id;
   emit(state, { type: 'lock', ship: ship.id, target: target.id });
   log(state, `${shipName(ship)} locks onto ${shipName(target)}.`);
+}
+
+/**
+ * Tractor beam: the target gets a tractor token (−1 agility until the End phase). A small
+ * target can then be dragged by `player`: barrel roll or 1-straight boost — even onto rocks.
+ */
+export function applyTractor(state, target, player) {
+  target.tractor = (target.tractor || 0) + 1;
+  log(state, `${shipName(target)} is caught in a tractor beam.`);
+  if (!target.destroyed) push(state, { t: 'tractorMove', ship: target.id, player });
 }
 
 /** Step that offers a ship a free action (optionally restricted to `only`). */

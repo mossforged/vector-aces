@@ -41,6 +41,14 @@ export function arcPolygon(pose, halfAngleDeg = CONFIG.arcHalfAngle) {
   ];
 }
 
+/** Bullseye arc: a straight strip `width` mm wide running forward from the front edge. */
+export function bullseyePolygon(pose, size = 'small', width = 20) {
+  const half = baseSize(size) / 2, R = CONFIG.playArea * 3;
+  const f = fwd(pose.h), r = right(pose.h), c = { x: pose.x, y: pose.y };
+  const front = add(c, mul(f, half));
+  return [add(front, mul(r, -width / 2)), add(front, mul(r, width / 2)), add(add(front, mul(r, width / 2)), mul(f, R)), add(add(front, mul(r, -width / 2)), mul(f, R))];
+}
+
 /** Place a local-coordinate outline (e.g. an asteroid) at x,y with rotation. */
 export function placeShape(points, x, y, rot = 0) {
   return points.map(([px, py]) => add(rotate({ x: px, y: py }, rot), { x, y }));

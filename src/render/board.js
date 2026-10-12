@@ -16,6 +16,9 @@ import { FACTIONS } from '../data/factions.js';
 import { Q, G, deployZone } from '../engine/index.js';
 import { drawShipArt } from './shipArt.js';
 import { Camera } from './camera.js';
+import { label } from '../ui/names.js';
+import { ORDNANCE } from '../data/ordnance.js';
+import { ordnancePolys } from '../engine/ordnance.js';
 
 const W = CONFIG.playArea;
 const MOVE_MS = 650;
@@ -69,6 +72,8 @@ export class BoardView {
         if (pose) this.ghosts.push({ ship: { ...state.ships[ev.ship], pose }, start: t, dur: 1100 });
       } else if (ev.type === 'damage' || ev.type === 'shield') {
         this.fx.push({ kind: ev.type === 'shield' ? 'shield' : (ev.faceup ? 'crit' : 'hit'), ship: ev.ship, start: t + 150, dur: 700 });
+      } else if (ev.type === 'detonate') {
+        this.fx.push({ kind: 'blast', x: ev.x, y: ev.y, start: t, dur: 900, big: ev.kind === 'bomb' });
       } else if (ev.type === 'attackResult') {
         this.fx.push({ kind: 'laser', from: ev.attacker, to: ev.defender, start: t, dur: 600, hit: ev.hits + ev.crits > 0 });
       }
@@ -199,10 +204,12 @@ export class BoardView {
     // ---- ground overlays ----
     const hl = this.highlight;
     const arcShips = new Set([this.selected, this.hover, ...(hl.ships || [])].filter(Boolean));
-    for (const s of Q.liveShips(st)) if (arcShips.has(s.id)) drawArc(ctx, this._pose(s, now), FACTIONS[s.owner].arcColor);
+    for (const s of Q.liveShips(st)) if (arcShips.has(s.id)) drawArc(ctx, this._pose(s, now), st.players[s.owner].arcColor, s);
     if (hl.template) { pathPoly(ctx, hl.template); ctx.fillStyle = 'rgba(255,255,255,0.16)'; ctx.fill(); }
     for (const pose of hl.poses || []) drawBaseOutline(ctx, pose, 'rgba(255,255,255,0.8)', true);
     if (hl.line) drawRangeLine(ctx, hl.line.a, hl.line.b);
+
+    drawOrdnance(ctx, st, now);
 
     // rock shadows
     const rocks = Q.obstaclePolys(st).map((poly, i) => ({ poly, h: rockHeight(st.obstacles[i]) }));
@@ -211,7 +218,7 @@ export class BoardView {
     // ship bases (ground level)
     const ships = Q.liveShips(st).map(s => ({ s, pose: this._pose(s, now) }));
     for (const { s, pose } of ships) {
-      drawBase(ctx, s, pose, { selected: s.id === this.selected, hot: (hl.ships || []).includes(s.id) || s.id === this.hover });
+      drawBase(ctx, s, pose, { color: st.players[s.owner].color, selected: s.id === this.selected, hot: (hl.ships || []).includes(s.id) || s.id === this.hover });
     }
 
     // ---- tall things, back to front ----
@@ -223,11 +230,15 @@ export class BoardView {
     ].sort((a, b) => a.depth - b.depth);
     for (const it of items) {
       if (it.kind === 'rock') drawRock(ctx, cam, it.r.poly, it.r.h);
-      else if (it.kind === 'ship') drawModel(ctx, cam, it.s, it.pose, { selected: it.s.id === this.selected, hot: it.s.id === this.hover || (hl.ships || []).includes(it.s.id) });
+      else if (it.kind === 'ship') {
+        if (it.s.cloaked) ctx.globalAlpha = 0.4 + 0.1 * Math.sin(now / 300);
+        drawModel(ctx, cam, it.s, it.pose, { color: st.players[it.s.owner].color, selected: it.s.id === this.selected, hot: it.s.id === this.hover || (hl.ships || []).includes(it.s.id) });
+        ctx.globalAlpha = 1;
+      }
       else {
         const k = (now - it.g.start) / it.g.dur;
         ctx.globalAlpha = Math.max(0, 1 - k);
-        drawModel(ctx, cam, it.g.ship, it.g.ship.pose, { sink: k * FLY });
+        drawModel(ctx, cam, it.g.ship, it.g.ship.pose, { sink: k * FLY, color: st.players[it.g.ship.owner].color });
         ctx.globalAlpha = 1;
         const p = cam.project(it.g.ship.pose.x, it.g.ship.pose.y, FLY * (1 - k));
         ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -239,13 +250,21 @@ export class BoardView {
     for (const f of this.fx) {
       if (now < f.start) continue;
       const k = (now - f.start) / f.dur;
+      if (f.kind === 'blast') {
+        ctx.setTransform(...cam.matrix(4));
+        const r = (f.big ? CONFIG.rangeBand + 15 : 40) * Math.min(1, k * 1.6);
+        const gr = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, Math.max(1, r));
+        gr.addColorStop(0, `rgba(255,240,200,${0.9 * (1 - k)})`); gr.addColorStop(0.5, `rgba(255,140,60,${0.6 * (1 - k)})`); gr.addColorStop(1, 'rgba(255,60,20,0)');
+        ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(f.x, f.y, Math.max(1, r), 0, Math.PI * 2); ctx.fill();
+        continue;
+      }
       if (f.kind === 'laser') {
         const a = st.ships[f.from], b = st.ships[f.to]; if (!a?.pose || !b?.pose) continue;
         const pa = cam.project(a.pose.x, a.pose.y, FLY), pb = cam.project(b.pose.x, b.pose.y, FLY);
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         const head = Math.min(1, k * 2.2), tail = Math.max(0, k * 2.2 - 0.6);
-        ctx.strokeStyle = FACTIONS[a.owner].color; ctx.lineWidth = 3 * this.dpr; ctx.lineCap = 'round';
-        ctx.shadowColor = FACTIONS[a.owner].color; ctx.shadowBlur = 12 * this.dpr;
+        ctx.strokeStyle = st.players[a.owner].color; ctx.lineWidth = 3 * this.dpr; ctx.lineCap = 'round';
+        ctx.shadowColor = st.players[a.owner].color; ctx.shadowBlur = 12 * this.dpr;
         ctx.beginPath(); ctx.moveTo(pa.x + (pb.x - pa.x) * tail, pa.y + (pb.y - pa.y) * tail); ctx.lineTo(pa.x + (pb.x - pa.x) * head, pa.y + (pb.y - pa.y) * head); ctx.stroke();
         ctx.shadowBlur = 0;
       } else {
@@ -270,9 +289,9 @@ export class BoardView {
         ctx.strokeRect(z.x0, z.y0, z.x1 - z.x0, z.y1 - z.y0); ctx.setLineDash([]);
         const pose = { x: this.mouse.x, y: this.mouse.y, h: this.placeRot };
         ctx.globalAlpha = 0.65;
-        drawArc(ctx, pose, FACTIONS[pl.ship.owner].arcColor);
-        drawBase(ctx, pl.ship, pose, {});
-        drawModel(ctx, cam, pl.ship, pose, {});
+        drawArc(ctx, pose, st.players[pl.ship.owner].arcColor, pl.ship);
+        drawBase(ctx, pl.ship, pose, { color: st.players[pl.ship.owner].color });
+        drawModel(ctx, cam, pl.ship, pose, { color: st.players[pl.ship.owner].color });
         ctx.globalAlpha = 1;
       } else if (pl.kind === 'obstacle') {
         ctx.globalAlpha = 0.7;
@@ -346,9 +365,9 @@ function drawMat(ctx, st) {
   const early = ['setup', 'obstacles', 'deploy'].includes(st.phase);
   for (const p of st.playerOrder) {
     const z = deployZone(st, p);
-    ctx.fillStyle = hexA(FACTIONS[p].color, early ? 0.16 : 0.06);
+    ctx.fillStyle = hexA(st.players[p].color, early ? 0.16 : 0.06);
     ctx.fillRect(z.x0, z.y0, z.x1 - z.x0, z.y1 - z.y0);
-    ctx.fillStyle = hexA(FACTIONS[p].color, 0.7);
+    ctx.fillStyle = hexA(st.players[p].color, 0.7);
     const edgeY = st.players[p].edge === 'top' ? 0 : W - 4;
     ctx.fillRect(0, edgeY, W, 4);
   }
@@ -379,15 +398,50 @@ function drawRock(ctx, cam, poly, h) {
   ctx.beginPath(); ctx.arc(c.x + 8, c.y + 4, 6, 0, Math.PI * 2); ctx.arc(c.x - 10, c.y + 9, 4, 0, Math.PI * 2); ctx.fill();
 }
 
-function drawArc(ctx, pose, color) {
-  const a0 = pose.h - CONFIG.arcHalfAngle * G.DEG - Math.PI / 2, a1 = pose.h + CONFIG.arcHalfAngle * G.DEG - Math.PI / 2;
-  for (let band = 3; band >= 1; band--) {
-    ctx.beginPath(); ctx.moveTo(pose.x, pose.y);
-    ctx.arc(pose.x, pose.y, band * CONFIG.rangeBand + 20, a0, a1); ctx.closePath();
-    ctx.fillStyle = color; ctx.fill();
+function drawArc(ctx, pose, color, ship) {
+  const arcs = ship ? (Q.chassis(ship).arcs || ['front']) : ['front'];
+  const wedge = (h, half) => {
+    const a0 = h - half - Math.PI / 2, a1 = h + half - Math.PI / 2;
+    for (let band = 3; band >= 1; band--) {
+      ctx.beginPath(); ctx.moveTo(pose.x, pose.y);
+      ctx.arc(pose.x, pose.y, band * CONFIG.rangeBand + 20, a0, a1); ctx.closePath();
+      ctx.fillStyle = color; ctx.fill();
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 1.2;
+    for (let band = 1; band <= 3; band++) { ctx.beginPath(); ctx.arc(pose.x, pose.y, band * CONFIG.rangeBand + 20, a0, a1); ctx.stroke(); }
+  };
+  const A = CONFIG.arcHalfAngle * G.DEG;
+  if (arcs.includes('turret')) wedge(pose.h, Math.PI);
+  else {
+    if (arcs.includes('front180')) wedge(pose.h, Math.PI / 2); else wedge(pose.h, A);
+    if (arcs.includes('rear')) wedge(pose.h + Math.PI, A);
   }
-  ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 1.2;
-  for (let band = 1; band <= 3; band++) { ctx.beginPath(); ctx.arc(pose.x, pose.y, band * CONFIG.rangeBand + 20, a0, a1); ctx.stroke(); }
+  if (arcs.includes('bullseye')) {
+    const far = G.bullseyePolygon(pose);
+    const len = CONFIG.rangeBand * 3 + 20, f = G.fwd(pose.h);
+    const strip = [far[0], far[1], G.add(far[1], G.mul(f, len)), G.add(far[0], G.mul(f, len))];
+    pathPoly(ctx, strip); ctx.fillStyle = 'rgba(255,240,180,0.10)'; ctx.fill();
+    ctx.setLineDash([6, 6]); ctx.strokeStyle = 'rgba(255,240,180,0.35)'; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+  }
+}
+
+function drawOrdnance(ctx, st, now) {
+  for (const tok of st.ordnance || []) {
+    const def = ORDNANCE[tok.type];
+    const polys = [ordnancePolys(tok)];
+    for (const poly of polys) {
+      pathPoly(ctx, poly);
+      ctx.fillStyle = hexA(def.color, 0.28); ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = hexA(def.color, 0.95); ctx.stroke();
+    }
+    // pulsing core: bombs tick, mines blink
+    const k = 0.5 + 0.5 * Math.sin(now / (def.kind === 'bomb' ? 180 : 420));
+    ctx.beginPath(); ctx.arc(tok.x, tok.y, 4 + k * 2, 0, Math.PI * 2); ctx.fillStyle = hexA(def.color, 0.6 + 0.4 * k); ctx.fill();
+    if (def.kind === 'bomb') { // blast radius hint (Range 1)
+      ctx.setLineDash([4, 8]); ctx.strokeStyle = hexA(def.color, 0.25); ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(tok.x, tok.y, CONFIG.rangeBand + (def.shape.r || 15), 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
 }
 
 function drawRangeLine(ctx, a, b) {
@@ -407,8 +461,8 @@ function drawBaseOutline(ctx, pose, color, dashed) {
   ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]);
 }
 
-function drawBase(ctx, s, pose, { selected, hot }) {
-  const fac = FACTIONS[s.owner], half = CONFIG.baseSize.small / 2;
+function drawBase(ctx, s, pose, { selected, hot, color }) {
+  const fac = { color: color || '#888888' }, half = CONFIG.baseSize.small / 2;
   ctx.save();
   ctx.translate(pose.x, pose.y); ctx.rotate(pose.h);
   ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(-half + 3, -half + 3, half * 2, half * 2);
@@ -425,7 +479,7 @@ function drawBase(ctx, s, pose, { selected, hot }) {
   ctx.restore();
 }
 
-function drawModel(ctx, cam, s, pose, { selected, hot, sink = 0 } = {}) {
+function drawModel(ctx, cam, s, pose, { selected, hot, sink = 0, color } = {}) {
   const lift = FLY - sink;
   const g = cam.project(pose.x, pose.y, 0), t = cam.project(pose.x, pose.y, lift);
   // peg
@@ -433,7 +487,7 @@ function drawModel(ctx, cam, s, pose, { selected, hot, sink = 0 } = {}) {
   ctx.strokeStyle = 'rgba(200,220,255,0.35)'; ctx.lineWidth = Math.max(1.5, cam.scale * 1.6);
   ctx.beginPath(); ctx.moveTo(g.x, g.y); ctx.lineTo(t.x, t.y); ctx.stroke();
   // model on a plane parallel to the table, with a little thickness
-  const fac = FACTIONS[s.owner];
+  const fac = { color: color || '#888888' };
   for (const [dl, alpha] of [[-1.6, 0.55], [0, 1]]) {
     ctx.setTransform(...cam.matrix(lift + dl));
     ctx.translate(pose.x, pose.y); ctx.rotate(pose.h); ctx.scale(1.5, 1.5);
@@ -479,6 +533,11 @@ function drawLabels(ctx, cam, st, s, pose, dpr, emphasise) {
   for (let i = 0; i < s.tokens.evade; i++) tokens.push(['E', '#2f86a8']);
   for (let i = 0; i < s.stress; i++) tokens.push(['!', '#c83434']);
   for (let i = 0; i < (s.ion || 0); i++) tokens.push(['ϟ', '#3d5bd6']);
+  if (s.cloaked) tokens.push(['◌', '#7a5cc7']);
+  for (let i = 0; i < (s.jam || 0); i++) tokens.push(['J', '#b0802a']);
+  for (let i = 0; i < (s.tractor || 0); i++) tokens.push(['T', '#2a8fb0']);
+  if (s.disarmed) tokens.push(['⊘', '#7a7f8a']);
+  if (s.round?.reinforce) tokens.push(['R', '#4a9a6a']);
   if (Q.liveShips(st).some(o => o.lockOn === s.id)) tokens.push(['⌖', '#b03030']);
   if (s.damage.some(c => c.faceup)) tokens.push(['✸', '#c88a20']);
   const tw = 13 * u, tt = tokens.length * tw;
@@ -490,6 +549,6 @@ function drawLabels(ctx, cam, st, s, pose, dpr, emphasise) {
   if (emphasise) {
     ctx.font = `600 ${10 * u}px "IBM Plex Sans", system-ui, sans-serif`;
     ctx.fillStyle = 'rgba(232,236,242,0.95)';
-    ctx.fillText(Q.shipName(s), p.x, y0 - (tokens.length ? 25 : 13) * u);
+    ctx.fillText(label(Q.shipName(s)), p.x, y0 - (tokens.length ? 25 : 13) * u);
   }
 }

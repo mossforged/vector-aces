@@ -2,7 +2,7 @@
 import { SHIPS } from '../data/ships.js';
 import { PILOTS } from '../data/pilots.js';
 import { UPGRADES } from '../data/upgrades.js';
-import { FACTIONS, DEFAULT_INITIATIVE_FACTION } from '../data/factions.js';
+import { FACTIONS, TIE_INITIATIVE_FACTION } from '../data/factions.js';
 import { buildDamageDeck } from '../data/damageDeck.js';
 import { CONFIG, ASTEROIDS } from '../data/config.js';
 import { shuffle, nextRandom, seedFromString } from './rng.js';
@@ -19,7 +19,7 @@ export function squadPoints(squad) {
 /** Upgrade ids a pilot could legally equip in some slot (ignores uniqueness and points). */
 export function upgradeAllowed(pilotId, upgradeId) {
   const p = PILOTS[pilotId], u = UPGRADES[upgradeId], ch = SHIPS[p.ship];
-  if (u.faction && u.faction !== ch.faction) return false;
+  if (u.faction && u.faction !== p.faction) return false;
   if (u.ships && !u.ships.includes(p.ship)) return false;
   if (u.sizes && !u.sizes.includes(ch.size)) return false;
   return p.slots.includes(u.slot);
@@ -34,7 +34,7 @@ export function validateSquad(faction, squad, pointLimit = Infinity) {
     const p = PILOTS[e.pilot];
     if (!p) { errs.push(`Unknown pilot ${e.pilot}`); continue; }
     const ch = SHIPS[p.ship];
-    if (ch.faction !== faction) errs.push(`${p.name} is not a ${FACTIONS[faction].short} pilot.`);
+    if (p.faction !== faction) errs.push(`${p.name} is not a ${FACTIONS[faction].short} pilot.`);
     const names = [p.unique ? p.name : null, ...(e.upgrades || []).map(u => (UPGRADES[u]?.unique ? UPGRADES[u].name : null))].filter(Boolean);
     for (const n of names) { if (uniques.has(n)) errs.push(`Only one "${n}" allowed.`); uniques.add(n); }
     const slots = p.slots.slice();
@@ -53,27 +53,24 @@ export function validateSquad(faction, squad, pointLimit = Infinity) {
 /**
  * Create a new game state. Nothing here is random except via state.rng, so
  * two peers calling createGame with the same options get identical states.
- *  opts = { seed, squads: { league: [...], dominion: [...] }, names: {...}, obstacles: bool }
+ *  opts = { seed, obstacles: bool, seats: [{ faction, name, squad }, { faction, name, squad }] }
+ * Seat 1 ('p1') deploys at the bottom edge, seat 2 ('p2') at the top.
+ * (Legacy shape { squads: { league, dominion }, names } is still accepted.)
  */
 export function createGame(opts) {
-  const playerOrder = ['league', 'dominion'];
-  const points = Object.fromEntries(playerOrder.map(p => [p, squadPoints(opts.squads[p])]));
-  const initiative = points.league === points.dominion ? DEFAULT_INITIATIVE_FACTION
-    : (points.league < points.dominion ? 'league' : 'dominion');
-
+  const seats = opts.seats || ['league', 'dominion'].map(f => ({ faction: f, name: opts.names?.[f], squad: opts.squads[f] }));
+  const playerOrder = ['p1', 'p2'];
   const state = {
     v: ENGINE_VERSION,
     rng: typeof opts.seed === 'number' ? opts.seed >>> 0 : seedFromString(opts.seed ?? 'vector-aces'),
     round: 0,
     phase: 'setup',
     playerOrder,
-    players: Object.fromEntries(playerOrder.map(p => [p, {
-      id: p, name: opts.names?.[p] || FACTIONS[p].short, points: points[p],
-      edge: p === 'league' ? 'bottom' : 'top',
-    }])),
-    initiative,
+    players: {},
+    initiative: null,
     ships: {}, shipOrder: [],
     obstacles: [],
+    ordnance: [],
     touches: [],
     damageDeck: [], damageDiscard: [],
     dials: {},
@@ -85,13 +82,29 @@ export function createGame(opts) {
     winner: null,
     options: { obstacles: !!opts.obstacles },
   };
+  const mirror = seats[0].faction === seats[1].faction;
+  playerOrder.forEach((p, i) => {
+    const f = FACTIONS[seats[i].faction];
+    const look = mirror && i === 1 ? f.alt : f;
+    state.players[p] = {
+      id: p, faction: f.id, name: seats[i].name || `${f.short}${mirror ? ` ${i + 1}` : ''}`,
+      points: squadPoints(seats[i].squad), edge: i === 0 ? 'bottom' : 'top',
+      color: look.color, arcColor: look.arcColor,
+    };
+  });
+  const [a, b] = playerOrder.map(p => state.players[p]);
+  if (a.points !== b.points) state.initiative = a.points < b.points ? 'p1' : 'p2';
+  else if ((a.faction === TIE_INITIATIVE_FACTION) !== (b.faction === TIE_INITIATIVE_FACTION)) state.initiative = a.faction === TIE_INITIATIVE_FACTION ? 'p1' : 'p2';
+  else state.initiative = nextRandom(state) < 0.5 ? 'p1' : 'p2';
+  const initiative = state.initiative;
+  const squads = { p1: seats[0].squad, p2: seats[1].squad };
 
   let n = 0;
   for (const p of playerOrder) {
     const counts = {};
-    for (const e of opts.squads[p]) counts[e.pilot] = (counts[e.pilot] || 0) + 1;
+    for (const e of squads[p]) counts[e.pilot] = (counts[e.pilot] || 0) + 1;
     const seen = {};
-    for (const e of opts.squads[p]) {
+    for (const e of squads[p]) {
       const id = `s${++n}`;
       const pd = PILOTS[e.pilot];
       seen[e.pilot] = (seen[e.pilot] || 0) + 1;
@@ -99,7 +112,7 @@ export function createGame(opts) {
         id, owner: p, pilot: e.pilot, chassis: pd.ship,
         tag: counts[e.pilot] > 1 ? seen[e.pilot] : null,
         upgrades: (e.upgrades || []).map(u => ({ id: u, discarded: false })),
-        shields: 0, ion: 0,
+        shields: 0, ion: 0, conditions: [], cloaked: false, jam: 0, tractor: 0, disarmed: false,
         damage: [], stress: 0, tokens: { focus: 0, evade: 0 },
         lockOn: null,
         pose: null, deployed: false, destroyed: false, pendingDestroy: false, fled: false,
@@ -111,13 +124,13 @@ export function createGame(opts) {
   }
 
   state.damageDeck = shuffle(state, buildDamageDeck());
-  log(state, `${state.players[initiative].name} (${FACTIONS[initiative].short}) has initiative.`);
+  log(state, `${state.players[initiative].name} (${FACTIONS[state.players[initiative].faction].short}) has initiative.`);
 
   if (state.options.obstacles) {
     let who = initiative;
     for (let i = 0; i < CONFIG.obstacleCount; i++) {
       enqueue(state, { t: 'placeObstacle', player: who, shape: i });
-      who = who === 'league' ? 'dominion' : 'league';
+      who = who === 'p1' ? 'p2' : 'p1';
     }
   }
   enqueue(state, { t: 'beginDeploy' });
@@ -125,7 +138,7 @@ export function createGame(opts) {
 }
 
 export function freshRound() {
-  return { actionsUsed: [], skipAction: false, agilityBonus: 0, attackBonus: 0, deadeye: false, attacked: false, revealed: null, maneuver: null };
+  return { actionsUsed: [], skipAction: false, agilityBonus: 0, attackBonus: 0, deadeye: false, attacked: false, revealed: null, maneuver: null, reinforce: null, moved: false };
 }
 
 // ---------------- obstacles ----------------

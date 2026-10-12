@@ -37,7 +37,7 @@ const intro = { league: PRESET_SQUADS.league.intro.ships, dominion: PRESET_SQUAD
 
 test('setup: initiative and deployment order', () => {
   const s = newGame({ seed: 1, squads: intro });
-  assert.equal(s.initiative, 'dominion'); // 28 vs 28 → default faction
+  assert.equal(s.initiative, 'p2'); // 28 vs 28 → the Dominion player (seat 2) wins ties
   assert.equal(s.prompt.kind, 'deploy');
   const lowest = Math.min(...Object.values(s.ships).map(x => Q.pilot(x).skill));
   assert.equal(Q.pilot(s.ships[s.prompt.ship]).skill, lowest); // lowest skill first
@@ -56,18 +56,18 @@ test('deploy outside zone is rejected', () => {
 
 test('wrong player cannot answer', () => {
   const s = newGame({ seed: 2, squads: intro });
-  const other = s.prompt.player === 'league' ? 'dominion' : 'league';
+  const other = s.prompt.player === 'p1' ? 'p2' : 'p1';
   assert.ok(applyAction(s, { type: 'CHOOSE', player: other, choice: 'auto' }).error);
 });
 
 test('planning waits for both, then activates lowest skill first', () => {
   let s = deployAll(newGame({ seed: 3, squads: intro }));
   assert.equal(s.phase, 'planning');
-  assert.deepEqual(waitingOn(s).sort(), ['dominion', 'league']);
+  assert.deepEqual(waitingOn(s).sort(), ['p1', 'p2']);
   const dials = p => Object.fromEntries(Q.liveShips(s).filter(x => x.owner === p).map(x => [x.id, '2S']));
-  ({ state: s } = applyAction(s, { type: 'SUBMIT_DIALS', player: 'league', dials: dials('league') }));
+  ({ state: s } = applyAction(s, { type: 'SUBMIT_DIALS', player: 'p1', dials: dials('p1') }));
   assert.equal(s.phase, 'planning');
-  ({ state: s } = applyAction(s, { type: 'SUBMIT_DIALS', player: 'dominion', dials: dials('dominion') }));
+  ({ state: s } = applyAction(s, { type: 'SUBMIT_DIALS', player: 'p2', dials: dials('p2') }));
   assert.equal(s.phase, 'activation');
   assert.equal(s.prompt.kind, 'action');
   assert.equal(Q.pilot(s.ships[s.prompt.ship]).skill, Math.min(...Object.values(s.ships).map(x => Q.pilot(x).skill)));
@@ -75,10 +75,10 @@ test('planning waits for both, then activates lowest skill first', () => {
 
 test('red maneuver gives stress; stressed ship has no actions', () => {
   let s = deployAll(newGame({ seed: 4, squads: intro }));
-  const lancer = Q.liveShips(s).find(x => x.owner === 'league');
-  const d = { league: { [lancer.id]: '4K' }, dominion: Object.fromEntries(Q.liveShips(s).filter(x => x.owner === 'dominion').map(x => [x.id, '1TL'])) };
-  ({ state: s } = applyAction(s, { type: 'SUBMIT_DIALS', player: 'league', dials: d.league }));
-  ({ state: s } = applyAction(s, { type: 'SUBMIT_DIALS', player: 'dominion', dials: d.dominion }));
+  const lancer = Q.liveShips(s).find(x => x.owner === 'p1');
+  const d = { league: { [lancer.id]: '4K' }, dominion: Object.fromEntries(Q.liveShips(s).filter(x => x.owner === 'p2').map(x => [x.id, '1TL'])) };
+  ({ state: s } = applyAction(s, { type: 'SUBMIT_DIALS', player: 'p1', dials: d.league }));
+  ({ state: s } = applyAction(s, { type: 'SUBMIT_DIALS', player: 'p2', dials: d.dominion }));
   let guard = 0;
   while (s.phase === 'activation' && guard++ < 20) ({ state: s } = applyAction(s, { type: 'CHOOSE', player: s.prompt.player, choice: s.prompt.options.at(-1).id }));
   assert.equal(s.ships[lancer.id].stress, 1);
@@ -175,6 +175,7 @@ const n = await runNetTest(20);
 console.log(`  ✓ ${n} two-client games stayed in sync with secret dials`);
 
 await import('./mechanics.mjs');
+await import('./foundation.mjs');
 console.log('cards');
 const { runCardSim } = await import('./cards.mjs');
 const sim = await runCardSim(250);

@@ -4,9 +4,13 @@ import pilots from './pilots.js';
 import elite from './elite.js';
 import gear from './gear.js';
 import weapons from './weapons.js';
+import ordnance from './ordnance.js';
+import dominion from './dominion.js';
+import league from './league.js';
+import syndicate from './syndicate.js';
 import { STEPS } from '../flow.js';
 
-export const CARDS = { ...pilots, ...elite, ...gear, ...weapons };
+export const CARDS = { ...pilots, ...elite, ...gear, ...weapons, ...ordnance, ...dominion, ...league, ...syndicate };
 
 for (const [id, def] of Object.entries(CARDS)) {
   def.id = id;

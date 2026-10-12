@@ -8,31 +8,50 @@ import { add, mul, fwd, right, rotate, DEG, baseSize } from './geometry.js';
 
 const ARC = { B: 45 * DEG, T: 90 * DEG };
 
+// Every bearing = a basic template shape (geometry) + an optional rotation at the end.
+//   K   reverse turn: straight, then 180°
+//   SL/SR  Segnor's loop: bank, then 180°
+//   TRL/TRR Tallon roll: turn, then a further 90° in the turn's direction
+//   RBL/RS/RBR reverse maneuvers: the template runs backwards from the rear edge
+//   ST  stationary (speed 0): the ship stays put
+export const GEOMETRY = { S: 'S', K: 'S', BL: 'BL', BR: 'BR', TL: 'TL', TR: 'TR', SL: 'BL', SR: 'BR', TRL: 'TL', TRR: 'TR', RS: 'S', RBL: 'BR', RBR: 'BL', ST: 'ST' };
+const END_ROTATION = { K: Math.PI, SL: Math.PI, SR: Math.PI, TRL: -Math.PI / 2, TRR: Math.PI / 2 };
+export const isReverse = b => b === 'RS' || b === 'RBL' || b === 'RBR';
+
 export function templateLength(m) {
-  if (m.bearing === 'S' || m.bearing === 'K') return CONFIG.straightPerSpeed * m.speed;
-  const kind = m.bearing[0];
+  const g = GEOMETRY[m.bearing] || m.bearing;
+  if (g === 'ST') return 0;
+  if (g === 'S') return CONFIG.straightPerSpeed * m.speed;
+  const kind = g[0];
   const r = kind === 'B' ? CONFIG.bankRadius[m.speed] : CONFIG.turnRadius[m.speed];
   return r * ARC[kind];
 }
 
 /**
  * Build the path for a maneuver from a starting pose.
- * Returns { length, poseAt(u), final, templatePoly }.
+ * Returns { length, base, poseAt(u), final, templatePoly, bearing, rotates }.
  *  - poseAt(u): ship pose with its rear midpoint at u along the template (u in [-base, length])
- *  - final: pose at u = length (with the 180° flip applied for K-turns)
+ *  - final: pose at u = length, including any end rotation (K-turn, loop, roll)
+ *  - opts.basic: drop the end rotation (how bumped loops/rolls/K-turns resolve)
  */
-export function buildPath(pose, m, size = 'small', { asStraight = false } = {}) {
+export function buildPath(pose, m, size = 'small', { asStraight = false, basic = asStraight } = {}) {
   const L = baseSize(size);
-  const h0 = pose.h;
-  const front = add(pose, mul(fwd(h0), L / 2));          // template start point
-  const bearing = asStraight && m.bearing === 'K' ? 'S' : m.bearing;
-  const length = templateLength({ ...m, bearing });
+  const bearing = m.bearing;
+  if (bearing === 'ST') {
+    const still = () => ({ ...pose });
+    return { length: 0, base: L, poseAt: still, final: { ...pose }, templatePoly: [], bearing, rotates: false };
+  }
+  const rev = isReverse(bearing);
+  const h0 = rev ? pose.h + Math.PI : pose.h;
+  const geo = GEOMETRY[bearing] || bearing;
+  const front = add(pose, mul(fwd(h0), L / 2));          // template start point (rear edge for reverse)
+  const length = templateLength({ ...m, bearing: geo });
 
   let pointAt; // u >= 0 -> {p, h}
-  if (bearing === 'S' || bearing === 'K') {
+  if (geo === 'S') {
     pointAt = u => ({ p: add(front, mul(fwd(h0), u)), h: h0 });
   } else {
-    const kind = bearing[0], dir = bearing[1] === 'R' ? 1 : -1;
+    const kind = geo[0], dir = geo[1] === 'R' ? 1 : -1;
     const r = kind === 'B' ? CONFIG.bankRadius[m.speed] : CONFIG.turnRadius[m.speed];
     const centre = add(front, mul(right(h0), r * dir));
     const v0 = { x: front.x - centre.x, y: front.y - centre.y };
@@ -42,19 +61,21 @@ export function buildPath(pose, m, size = 'small', { asStraight = false } = {}) 
     };
   }
 
+  const flip = rev ? Math.PI : 0;
   const poseAt = u => {
     if (u <= 0) {
       const p = add(front, mul(fwd(h0), u));
       const c = add(p, mul(fwd(h0), L / 2));
-      return { x: c.x, y: c.y, h: h0 };
+      return { x: c.x, y: c.y, h: h0 - flip };
     }
     const { p, h } = pointAt(Math.min(u, length));
     const c = add(p, mul(fwd(h), L / 2));
-    return { x: c.x, y: c.y, h };
+    return { x: c.x, y: c.y, h: h - flip };
   };
 
   const end = poseAt(length);
-  const final = bearing === 'K' ? { ...end, h: end.h + Math.PI } : end;
+  const rot = basic ? 0 : (END_ROTATION[bearing] || 0);
+  const final = { ...end, h: end.h + rot };
 
   // Template outline: centre-line offset ±width/2, sampled.
   const W = CONFIG.templateWidth / 2, N = 12, leftSide = [], rightSide = [];
@@ -65,13 +86,13 @@ export function buildPath(pose, m, size = 'small', { asStraight = false } = {}) 
   }
   const templatePoly = [...leftSide, ...rightSide.reverse()];
 
-  return { length, base: L, poseAt, final, templatePoly, bearing };
+  return { length, base: L, poseAt, final, templatePoly, bearing, rotates: rot !== 0 };
 }
 
 /** Barrel-roll destinations: left/right × back/centre/forward offsets. */
-export function barrelRollPoses(pose, size = 'small') {
+export function barrelRollPoses(pose, size = 'small', speed = 1) {
   const L = baseSize(size);
-  const shift = L + CONFIG.straightPerSpeed;           // base width + 1-straight template
+  const shift = L + CONFIG.straightPerSpeed * speed;   // base width + straight template (1, or 2 for decloak)
   const out = [];
   for (const side of [-1, 1]) {
     for (const [label, off] of [['back', -L / 2], ['centre', 0], ['forward', L / 2]]) {
@@ -86,6 +107,6 @@ export function barrelRollPoses(pose, size = 'small') {
 export function samplePath(path, steps = 24) {
   const out = [];
   for (let i = 0; i <= steps; i++) out.push(path.poseAt(-path.base + ((path.length + path.base) * i) / steps));
-  if (path.bearing === 'K') out.push(path.final);
+  if (path.rotates) out.push(path.final);
   return out;
 }

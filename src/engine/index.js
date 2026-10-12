@@ -15,9 +15,10 @@ import * as activation from './activation.js';
 import * as actions from './actions.js';
 import * as combat from './combat.js';
 import * as damage from './damage.js';
+import * as ordnance from './ordnance.js';
 import { log } from './flow.js';
 
-for (const mod of [setup, activation, actions, combat, damage]) register(mod);
+for (const mod of [setup, activation, actions, combat, damage, ordnance]) register(mod);
 
 export function newGame(opts) {
   const state = setup.createGame(opts);

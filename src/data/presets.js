@@ -1,5 +1,9 @@
-// Ready-made squads. Each entry: { pilot, upgrades: [] }.
-export const PRESET_SQUADS = {
+// Ready-made squads. Each entry: { pilot, upgrades: [] }. Batches add theirs in presets/<batch>.js.
+import dominionPresets from './presets/dominion.js';
+import leaguePresets from './presets/league.js';
+import syndicatePresets from './presets/syndicate.js';
+
+const BASE = {
   league: {
     intro: { name: 'Starter: lone ace', ships: [{ pilot: 'kestrel_vane', upgrades: [] }] },
     duo: { name: 'Wingmates', ships: [
@@ -44,3 +48,9 @@ export const PRESET_SQUADS = {
     ] },
   },
 };
+
+/** Batch presets carry their own `faction`; merged into the base table here. */
+export const PRESET_SQUADS = { league: { ...BASE.league }, dominion: { ...BASE.dominion }, syndicate: {} };
+for (const extra of [dominionPresets, leaguePresets, syndicatePresets]) {
+  for (const [k, v] of Object.entries(extra)) (PRESET_SQUADS[v.faction] ||= {})[k] = v;
+}

@@ -11,6 +11,7 @@ import { renderLog } from './logPanel.js';
 import { esc } from './glyphs.js';
 import { DiceRoller } from './diceRoller.js';
 import { renderShipTooltip, placeTooltip } from './shipTooltip.js';
+import { namesToggleButton, onNamesChange } from './names.js';
 
 const $ = sel => document.querySelector(sel);
 
@@ -24,6 +25,8 @@ class App {
       onPlace: pos => this._place(pos),
     });
     this.roller = new DiceRoller($('#dicemat'));
+    $('#names-toggle-game').append(namesToggleButton());
+    $('#names-toggle-lobby').append(namesToggleButton());
     document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => {
       const c = this.board.camera, k = b.dataset.cam;
       if (k === 'left') c.spin(Math.PI / 4); else if (k === 'right') c.spin(-Math.PI / 4); else this.board.setView(k);
@@ -120,7 +123,7 @@ class App {
     const st = this.state;
     const waiting = waitingOn(st);
     $('#status').innerHTML = st.winner ? `<b>${esc(st.players[st.winner].name)} wins</b>`
-      : `<span>Round ${st.round || '–'}</span><span>${phaseName(st)}</span>${waiting.map(p => `<span class="pill" style="--fc:${FACTIONS[p].color}">${esc(st.players[p].name)}${s.controls(p) ? ' (you)' : ''}</span>`).join('')}`;
+      : `<span>Round ${st.round || '–'}</span><span>${phaseName(st)}</span>${waiting.map(p => `<span class="pill" style="--fc:${st.players[p].color}">${esc(st.players[p].name)}${s.controls(p) ? ' (you)' : ''}</span>`).join('')}`;
     const rolling = this.roller.cursor - performance.now();
     if (st.prompt && /^(mod|attackPrep|onHit)/.test(st.prompt.kind) && rolling > 50) {
       $('#prompt').innerHTML = '<div class="phase-title">Combat</div><p class="muted">Rolling dice…</p>';

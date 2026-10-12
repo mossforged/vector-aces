@@ -8,13 +8,28 @@ import { basePolygon, polygonInsideBoard, polygonsIntersect } from './geometry.j
 import { rollFace } from './dice.js';
 import { flipFacedown } from './damage.js';
 import { cardActions, fold, ownSteps } from './hooks.js';
-import { addStress, acquireLock } from './effects.js';
+import { addStress, acquireLock, jammed, freeAction } from './effects.js';
+import { checkMines } from './ordnance.js';
+import { dialFor } from '../data/ships.js';
+import { UPGRADES } from '../data/upgrades.js';
 import {
-  chassis, liveShips, shipName, hasFaceup, rangeBetween, actionBar, hasFlag,
-  overlapsAnyShip, obstaclePolys, faceupCards,
+  chassis, liveShips, shipName, hasFaceup, rangeBetween, actionBar, hasFlag, maneuverColor, friendsInRange, enemiesInRange,
+  overlapsAnyShip, obstaclePolys, faceupCards, shipPoly,
 } from './queries.js';
 
-export const ACTION_LABELS = { focus: 'Focus', evade: 'Evade', lock: 'Target lock', roll: 'Barrel roll', boost: 'Boost', pass: 'Pass' };
+export const ACTION_LABELS = {
+  focus: 'Focus', evade: 'Evade', lock: 'Target lock', roll: 'Barrel roll', boost: 'Boost', pass: 'Pass',
+  slam: 'SLAM (second maneuver)', cloak: 'Cloak', reload: 'Reload', jam: 'Jam', coordinate: 'Coordinate', reinforce: 'Reinforce',
+};
+
+/** Weapon upgrades a Reload action could restore. */
+const reloadable = ship => ship.upgrades.filter(u => u.discarded && ['torpedo', 'missile'].includes(UPGRADES[u.id].slot));
+/** Maneuvers a SLAM could use: same speed as this round's maneuver. */
+function slamOptions(state, ship) {
+  if (!ship.round.moved || !ship.round.revealed) return [];
+  const speed = parseInt(ship.round.revealed, 10);
+  return dialFor(ship.chassis).filter(m => m.speed === speed && !(ship.stress > 0 && maneuverColor(state, ship, m) === 'r'));
+}
 
 function lockTargets(state, ship) {
   return liveShips(state).filter(o => o.owner !== ship.owner && rangeBetween(ship, o).band);
@@ -28,6 +43,15 @@ function clearOf(state, ship, poly, template = null) {
 
 export function rollPositions(state, ship) {
   return barrelRollPoses(ship.pose, chassis(ship).size).filter(r => clearOf(state, ship, basePolygon(r.pose, chassis(ship).size)));
+}
+
+/** Tractor-beam drag: barrel roll or 1-straight boost; obstacles allowed, ships and the edge not. */
+export function tractorPositions(state, ship) {
+  const size = chassis(ship).size;
+  const ok = pose => { const poly = basePolygon(pose, size); return polygonInsideBoard(poly) && !overlapsAnyShip(state, poly, ship.id); };
+  const out = barrelRollPoses(ship.pose, size).map(r => ({ id: r.id, label: `Roll ${r.side} · ${r.label}`, pose: r.pose }));
+  out.push({ id: 'S', label: 'Pull forward (1 straight)', pose: buildPath(ship.pose, { speed: 1, bearing: 'S' }, size).final });
+  return size === 'small' ? out.filter(o => ok(o.pose)) : [];
 }
 
 export function boostPositions(state, ship) {
@@ -54,6 +78,11 @@ export function availableActions(state, ship, { only = null, grant = [] } = {}) 
     if (a.id === 'lock') return lockTargets(state, ship).length > 0;
     if (a.id === 'roll') return rollPositions(state, ship).length > 0;
     if (a.id === 'boost') return boostPositions(state, ship).length > 0;
+    if (a.id === 'slam') return slamOptions(state, ship).length > 0;
+    if (a.id === 'cloak') return !ship.cloaked;
+    if (a.id === 'reload') return reloadable(ship).length > 0;
+    if (a.id === 'jam') return enemiesInRange(state, ship, 1, 2).length > 0;
+    if (a.id === 'coordinate') return friendsInRange(state, ship, 1, 2).length > 0;
     return true;
   });
 }
@@ -74,12 +103,38 @@ export function performAction(state, ship, id) {
   ship.round.actionsUsed.push(id);
   switch (id) {
     case 'focus': {
+      if (jammed(state, ship)) break;
       const n = fold(state, ship, 'focusGain', 1);
       ship.tokens.focus += n;
       log(state, `${shipName(ship)} focuses${n > 1 ? ` (+${n})` : ''}.`);
       break;
     }
-    case 'evade': ship.tokens.evade++; log(state, `${shipName(ship)} prepares to evade.`); break;
+    case 'evade': if (jammed(state, ship)) break; ship.tokens.evade++; log(state, `${shipName(ship)} prepares to evade.`); break;
+    case 'cloak': ship.cloaked = true; emit(state, { type: 'cloak', ship: ship.id }); log(state, `${shipName(ship)} cloaks.`); break;
+    case 'slam': {
+      const opts = slamOptions(state, ship).map(m => ({ id: m.key, label: m.key, maneuver: { ...m, color: maneuverColor(state, ship, m) } }));
+      ask(state, { player: ship.owner, kind: 'overrideManeuver', ship: ship.id, text: `${shipName(ship)}: SLAM — choose a second maneuver of the same speed (then weapons are disabled this round).`, options: opts, onChoose: 'slam', data: { ship: ship.id } });
+      break;
+    }
+    case 'reload': {
+      const opts = reloadable(ship).map(u => ({ id: u.id, label: UPGRADES[u.id].name }));
+      ask(state, { player: ship.owner, kind: 'pick', ship: ship.id, text: 'Reload which weapon? (Weapons are disabled for the rest of this round.)', options: opts, onChoose: 'reload', data: { ship: ship.id } });
+      break;
+    }
+    case 'jam': {
+      const opts = enemiesInRange(state, ship, 1, 2).map(e => ({ id: e.id, label: `${shipName(e)} (jam ${e.jam || 0}/2)`, target: e.id }));
+      ask(state, { player: ship.owner, kind: 'pick', ship: ship.id, text: 'Jam which enemy? (Up to 2 jam tokens: each one cancels its next focus, evade or lock.)', options: opts, onChoose: 'jam', data: { ship: ship.id } });
+      break;
+    }
+    case 'coordinate': {
+      const opts = friendsInRange(state, ship, 1, 2).map(o => ({ id: o.id, label: shipName(o), target: o.id }));
+      ask(state, { player: ship.owner, kind: 'pick', ship: ship.id, text: 'Coordinate: which wingmate gets a free action?', options: opts, onChoose: 'coordinate', data: { ship: ship.id } });
+      break;
+    }
+    case 'reinforce':
+      ask(state, { player: ship.owner, kind: 'pick', ship: ship.id, text: 'Reinforce which half of the ship this round?',
+        options: [{ id: 'fore', label: 'Fore (front half)' }, { id: 'aft', label: 'Aft (rear half)' }], onChoose: 'reinforce', data: { ship: ship.id } });
+      break;
     case 'lock': push(state, { t: 'lockPrompt', ship: ship.id }); break;
     case 'roll': {
       const opts = rollPositions(state, ship).map(r => ({ id: r.id, label: `${r.side} · ${r.label}`, pose: r.pose }));
@@ -136,6 +191,14 @@ export const steps = {
     ask(state, { player: ship.owner, kind: 'lockTarget', ship: ship.id, text: `${shipName(ship)}: lock onto which enemy?`, options: opts, onChoose: 'lockTarget', data: { ship: ship.id } });
   },
   stressStep(state, s) { addStress(state, state.ships[s.ship]); },
+  tractorMove(state, s) {
+    const ship = state.ships[s.ship];
+    if (ship.destroyed) return;
+    const opts = tractorPositions(state, ship).map(o => ({ id: o.id, label: o.label, pose: o.pose }));
+    if (!opts.length) return;
+    ask(state, { player: s.player, kind: 'rollPosition', ship: ship.id, text: `Tractor beam: drag ${shipName(ship)}?`,
+      options: [...opts, { id: 'stay', label: 'Leave it' }], onChoose: 'tractorMove', data: { ship: ship.id } });
+  },
 };
 
 export const choices = {
@@ -159,6 +222,43 @@ export const choices = {
     state.touches = state.touches.filter(([a, b]) => a !== ship.id && b !== ship.id);
     emit(state, { type: 'move', ship: ship.id, path: [from, r.pose] });
     log(state, `${shipName(ship)} barrel rolls ${r.side}.`);
+    checkMines(state, ship);
+  },
+  tractorMove(state, data, choice) {
+    if (choice === 'stay') return;
+    const ship = state.ships[data.ship];
+    const o = tractorPositions(state, ship).find(x => x.id === choice);
+    if (!o) throw new RuleError('illegal tractor move');
+    const from = ship.pose;
+    ship.pose = o.pose;
+    state.touches = state.touches.filter(([a, b]) => a !== ship.id && b !== ship.id);
+    emit(state, { type: 'move', ship: ship.id, path: [from, o.pose] });
+    log(state, `${shipName(ship)} is dragged by the tractor beam.`);
+    checkMines(state, ship);
+    if (!ship.destroyed && obstaclePolys(state).some(p => polygonsIntersect(shipPoly(ship), p))) push(state, { t: 'obstacleHit', ship: ship.id });
+  },
+  slam(state, data, choice) {
+    const ship = state.ships[data.ship];
+    if (!slamOptions(state, ship).some(m => m.key === choice)) throw new RuleError('illegal SLAM');
+    ship.disarmed = true;
+    push(state, { t: 'move', ship: ship.id, key: choice, slam: true });
+  },
+  reload(state, data, choice) {
+    const ship = state.ships[data.ship];
+    const u = reloadable(ship).find(x => x.id === choice); if (!u) throw new RuleError('nothing to reload');
+    u.discarded = false; ship.disarmed = true;
+    log(state, `${shipName(ship)} reloads ${UPGRADES[u.id].name}.`);
+  },
+  jam(state, data, choice) {
+    const t = state.ships[choice];
+    t.jam = Math.max(t.jam || 0, 2);
+    log(state, `${shipName(state.ships[data.ship])} jams ${shipName(t)}.`);
+  },
+  coordinate(state, data, choice) { push(state, freeAction(state.ships[choice], 'Coordinate: free action')); },
+  reinforce(state, data, choice) {
+    const ship = state.ships[data.ship];
+    ship.round.reinforce = choice;
+    log(state, `${shipName(ship)} reinforces its ${choice} shields.`);
   },
   boostPosition(state, data, choice) {
     const ship = state.ships[data.ship];
@@ -170,5 +270,6 @@ export const choices = {
     state.touches = state.touches.filter(([a, b]) => a !== ship.id && b !== ship.id);
     emit(state, { type: 'move', ship: ship.id, path: samples });
     log(state, `${shipName(ship)} boosts (${r.label.toLowerCase()}).`);
+    checkMines(state, ship, [r.path.templatePoly]);
   },
 };

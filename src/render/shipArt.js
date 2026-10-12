@@ -41,6 +41,12 @@ function stripe(ctx, segs, accent, w = 1.5) {
   ctx.lineWidth = w; ctx.strokeStyle = accent; ctx.stroke();
 }
 
+import dominionArt from './art/dominion.js';
+import leagueArt from './art/league.js';
+import syndicateArt from './art/syndicate.js';
+
+export const helpers = { poly, both, mirror, canopy, engine, stripe, hull, hullDark, line, stroke };
+
 const ART = {
   // Lancer: a forward-swept dart with a long nose and twin rear thrusters.
   lancer(ctx, accent) {
@@ -181,6 +187,8 @@ const ART = {
     stripe(ctx, [[8, 3, 13, 6], [-8, 3, -13, 6], [0, 10, 0, 16]], accent, 1.4);
     ctx.fillStyle = '#ff5c5c'; ctx.beginPath(); ctx.arc(-1.3, -13, 0.9, 0, Math.PI * 2); ctx.arc(1.3, -13, 0.9, 0, Math.PI * 2); ctx.fill();
   },
+
+  ...dominionArt, ...leagueArt, ...syndicateArt,
 
   generic(ctx, accent) {
     ctx.beginPath(); ctx.moveTo(0, -15); ctx.lineTo(12, 12); ctx.lineTo(0, 6); ctx.lineTo(-12, 12); ctx.closePath();

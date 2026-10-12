@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-12 — v0.4 foundation for every small ship
+- Seats and factions split: each player picks any faction (mirror matches allowed); faction now belongs to pilots. New third faction: Freeport Syndicate (ships arrive in its batch).
+- "Original names" toggle (top bar / lobby / key N): swaps every name on your screen for the original game's, per viewer.
+- New maneuvers (loop, Tallon roll, reverse, stationary), arcs (rear, 180°, turret, bullseye), actions (SLAM, cloak/decloak, reload, jam, coordinate, reinforce), tractor beams, condition-card framework.
+- Bombs and mines on the board with drop/detonation; all 8 bomb/mine upgrades (bomb slots now usable).
+- Content split into per-batch files (catalog, generated data, cards, art, presets) so the three remaining batches can be done in parallel chats.
+
 ## 2026-10-12 — v0.3 stage-1 ship import
 - Importer (`tools/xwing-import`) builds ship/pilot/upgrade data from the community first-edition dataset with our own names and wording.
 - 12 small ships, 57 pilots, 59 upgrades; new art for 10 ships; squad builder grouped by ship with filtered upgrade menus and a Random button.

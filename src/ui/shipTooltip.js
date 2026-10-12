@@ -3,6 +3,7 @@
 import { FACTIONS } from '../data/factions.js';
 import { UPGRADES } from '../data/upgrades.js';
 import { DAMAGE_CARDS } from '../data/damageDeck.js';
+import { CONDITIONS } from '../data/conditions.js';
 import { Q, G } from '../engine/index.js';
 import { maneuverIcon, maneuverLabel, esc } from './glyphs.js';
 
@@ -10,7 +11,7 @@ export function renderShipTooltip(el, state, shipId) {
   const s = state.ships[shipId];
   if (!s) { el.hidden = true; return; }
   const ch = Q.chassis(s), pl = Q.pilot(s);
-  const fac = FACTIONS[s.owner];
+  const fac = { ...FACTIONS[state.players[s.owner].faction], color: state.players[s.owner].color };
   const shieldMax = Q.stat(state, s, 'maxShields');
   const hullMax = ch.hull, hullLeft = Math.max(0, hullMax - Q.hullDamage(s));
   const faceup = s.damage.filter(c => c.faceup), facedown = s.damage.length - faceup.length;
@@ -25,6 +26,12 @@ export function renderShipTooltip(el, state, shipId) {
   const status = [];
   if (s.stress) status.push(`<li class="bad">Stressed ×${s.stress}: no actions, no red maneuvers</li>`);
   if (s.ion) status.push(`<li class="warn">Ionized: will drift 1 straight next activation</li>`);
+  if (s.cloaked) status.push('<li class="warn">Cloaked: +2 agility, cannot attack; may decloak at the start of Activation</li>');
+  if (s.jam) status.push(`<li class="warn">Jammed ×${s.jam}: each token cancels its next focus, evade or lock</li>`);
+  if (s.tractor) status.push(`<li class="bad">Tractor beam ×${s.tractor}: −${s.tractor} agility this round</li>`);
+  if (s.disarmed) status.push('<li class="bad">Weapons disabled this round</li>');
+  if (s.round.reinforce) status.push(`<li class="good">Reinforced (${s.round.reinforce}): attacks from that side lose 1 hit</li>`);
+  for (const c of s.conditions || []) status.push(`<li class="warn"><b>${esc(CONDITIONS[c.id]?.name || c.id)}</b> ${esc(CONDITIONS[c.id]?.text || '')}</li>`);
   if (s.delayedDestroy) status.push('<li class="bad">Wrecked: destroyed at the end of combat</li>');
   if (onRock) status.push('<li class="bad">On an asteroid: cannot attack</li>');
   for (const t of touching) status.push(`<li class="warn">Touching ${esc(Q.shipName(t))}: can't shoot each other</li>`);
@@ -59,7 +66,7 @@ export function renderShipTooltip(el, state, shipId) {
       ${status.length ? `<ul class="tt-status">${status.join('')}</ul>` : ''}
       ${s.round.revealed ? `<div class="tt-man">This round: ${maneuverIcon(s.round.revealed.replace(/^\d+/, ''), 'w', 16)} ${maneuverLabel(s.round.revealed)}</div>` : ''}
       ${pl.ability ? `<p class="tt-ability">${esc(pl.text)}</p>` : ''}
-      <div class="tt-actions">Actions: ${Q.actionBar(state, s).map(a => ({ focus: 'Focus', evade: 'Evade', lock: 'Target lock', roll: 'Barrel roll', boost: 'Boost' }[a])).join(' · ')}</div>
+      <div class="tt-actions">Actions: ${Q.actionBar(state, s).map(a => ({ focus: 'Focus', evade: 'Evade', lock: 'Target lock', roll: 'Barrel roll', boost: 'Boost', slam: 'SLAM', cloak: 'Cloak', reload: 'Reload', jam: 'Jam', coordinate: 'Coordinate', reinforce: 'Reinforce' }[a] || a)).join(' · ')}${(ch.arcs || []).filter(x => x !== 'front').length ? ` <span class="muted">· Arcs: ${(ch.arcs || []).map(x => ({ front: 'front', rear: 'rear', front180: '180°', turret: 'turret', bullseye: 'bullseye' }[x])).join(', ')}</span>` : ''}</div>
       ${s.upgrades.length ? `<ul class="tt-ups">${s.upgrades.map(u => `<li class="${u.discarded ? 'gone' : ''}"><b>${esc(UPGRADES[u.id].name)}</b> ${esc(UPGRADES[u.id].text)}</li>`).join('')}</ul>` : ''}
     </div>`;
   el.hidden = false;

@@ -5,7 +5,8 @@
 //   move → obstacles / bumps → stress → after-maneuver effects → action step
 import { dialFor, parseManeuver, SHIPS } from '../data/ships.js';
 import { push, ask, log, emit, RuleError } from './flow.js';
-import { buildPath } from './maneuvers.js';
+import { buildPath, barrelRollPoses } from './maneuvers.js';
+import { checkMines } from './ordnance.js';
 import { basePolygon, polygonInsideBoard, polygonsIntersect, closestPoints } from './geometry.js';
 import { rollFace } from './dice.js';
 import { sufferDamage, destroyShip } from './damage.js';
@@ -14,7 +15,18 @@ import { ownSteps, everyone, flag } from './hooks.js';
 import { addStress } from './effects.js';
 import {
   liveShips, shipName, chassis, enemyOf, effectiveSkill, maneuverColor, hasFaceup, obstaclePolys, shipPoly, shipList,
+  overlapsAnyShip,
 } from './queries.js';
+
+/** Where a cloaked ship may decloak: barrel roll with the 2-straight template, or 2 straight ahead. */
+export function decloakPositions(state, ship) {
+  const size = chassis(ship).size;
+  const clear = poly => polygonInsideBoard(poly) && !overlapsAnyShip(state, poly, ship.id) && !obstaclePolys(state).some(o => polygonsIntersect(poly, o));
+  const out = barrelRollPoses(ship.pose, size, 2).map(r => ({ id: r.id, label: `Roll ${r.side} · ${r.label}`, pose: r.pose }));
+  const ahead = buildPath(ship.pose, { speed: 2, bearing: 'S' }, size);
+  out.push({ id: 'ahead', label: 'Straight ahead (2)', pose: ahead.final, template: ahead.templatePoly });
+  return out.filter(o => clear(basePolygon(o.pose, size)) && !(o.template && obstaclePolys(state).some(p => polygonsIntersect(o.template, p))));
+}
 
 /** Ships in pilot-skill order; ties: initiative player first, then squad order. */
 export function skillOrder(state, dir = 1) {
@@ -68,7 +80,21 @@ export const steps = {
 
   activationPhase(state) {
     state.phase = 'activation';
-    push(state, ...skillOrder(state, 1).map(s => ({ t: 'activate', ship: s.id })), { t: 'combatPhase' });
+    const order = skillOrder(state, 1);
+    push(state,
+      ...order.filter(s => s.cloaked).map(s => ({ t: 'decloak', ship: s.id })),
+      ...order.map(s => ({ t: 'activate', ship: s.id })),
+      { t: 'detonateBombs' },
+      { t: 'combatPhase' });
+  },
+
+  decloak(state, s) {
+    const ship = state.ships[s.ship];
+    if (ship.destroyed || !ship.cloaked) return;
+    const opts = decloakPositions(state, ship).map(o => ({ id: o.id, label: o.label, pose: o.pose }));
+    if (!opts.length) return;
+    ask(state, { player: ship.owner, kind: 'rollPosition', ship: ship.id, text: `${shipName(ship)} may decloak (then it can attack again, but loses +2 agility).`,
+      options: [...opts, { id: 'stay', label: 'Stay cloaked' }], onChoose: 'decloak', data: { ship: ship.id } });
   },
 
   activate(state, s) {
@@ -112,6 +138,7 @@ export const steps = {
     const ship = state.ships[s.ship];
     if (ship.destroyed) return;
     const m = s.ion ? ION_MANEUVER : maneuverFor(ship, s.key);
+    ship.round.moved = true;
     const color = s.color ?? maneuverColor(state, ship, m);
     const size = chassis(ship).size;
     state.touches = state.touches.filter(([a, b]) => a !== ship.id && b !== ship.id);
@@ -121,7 +148,7 @@ export const steps = {
     const overlapping = pose => liveShips(state).filter(o => o.id !== ship.id && polygonsIntersect(basePolygon(pose, size), shipPoly(o)));
 
     if (overlapping(final).length) {
-      if (m.bearing === 'K') path = buildPath(ship.pose, m, size, { asStraight: true });
+      if (path.rotates) path = buildPath(ship.pose, m, size, { basic: true }); // bumped loops/rolls lose their flip
       for (let u = path.length; u >= -path.base; u -= 0.5) {
         const pose = path.poseAt(u);
         if (!overlapping(pose).length) { final = pose; endU = u; break; }
@@ -134,7 +161,7 @@ export const steps = {
     const from = ship.pose;
     const samples = [];
     for (let i = 0; i <= 24; i++) samples.push(path.poseAt(-path.base + ((endU + path.base) * i) / 24));
-    if (!bumped.length && path.bearing === 'K') samples.push(final);
+    if (!bumped.length && path.rotates) samples.push(final);
     emit(state, { type: 'move', ship: ship.id, path: samples, from, key: m.key, color });
     ship.pose = final;
 
@@ -143,10 +170,12 @@ export const steps = {
     if (!polygonInsideBoard(basePolygon(final, size))) { destroyShip(state, ship, 'fled'); return; }
 
     const obs = ship.round.ignoreObstacles ? [] : obstaclePolys(state);
-    const tpl = bumped.length ? null : path.templatePoly;
+    const tpl = bumped.length || !path.templatePoly.length ? null : path.templatePoly;
     const hitObstacle = obs.some(o => polygonsIntersect(basePolygon(final, size), o) || (tpl && polygonsIntersect(tpl, o)));
 
     if (s.ion) { ship.ion = 0; }
+    checkMines(state, ship, tpl ? [tpl] : []);
+    if (ship.destroyed) return;
     if (color === 'r') addStress(state, ship);
     if (color === 'g' && ship.stress > 0) ship.stress--;
     if (bumped.length || hitObstacle) ship.round.skipAction = true;
@@ -156,7 +185,7 @@ export const steps = {
     if ((bumped.length || hitObstacle) && hasFaceup(ship, 'dazed')) after.push({ t: 'simpleDamage', ship: ship.id, hits: 1, why: 'Dazed' });
     if (color === 'r' && hasFaceup(ship, 'hull_breach')) after.push({ t: 'rollForDamage', ship: ship.id, why: 'Hull Breach' });
     after.push(...ownSteps(state, ship, 'afterManeuver', color, { blocked: ship.round.skipAction, bumped: bumped.length > 0 }));
-    push(state, ...after, { t: 'actionStep', ship: ship.id });
+    push(state, ...after, ...(s.slam ? [] : [{ t: 'actionStep', ship: ship.id }]));
   },
 
   obstacleHit(state, s) {
@@ -188,12 +217,26 @@ export const steps = {
     for (const s of shipList(state)) {
       if (!flag(state, s, 'keepFocus')) s.tokens.focus = 0;
       s.tokens.evade = 0;
+      s.disarmed = false; s.jam = 0; s.tractor = 0;
     }
     push(state, { t: 'startRound' });
   },
 };
 
 export const choices = {
+  decloak(state, data, choice) {
+    if (choice === 'stay') return;
+    const ship = state.ships[data.ship];
+    const o = decloakPositions(state, ship).find(x => x.id === choice);
+    if (!o) throw new RuleError('cannot decloak there');
+    const from = ship.pose;
+    ship.pose = o.pose; ship.cloaked = false;
+    state.touches = state.touches.filter(([a, b]) => a !== ship.id && b !== ship.id);
+    emit(state, { type: 'move', ship: ship.id, path: [from, o.pose] });
+    emit(state, { type: 'decloak', ship: ship.id });
+    log(state, `${shipName(ship)} decloaks!`);
+    checkMines(state, ship, o.template ? [o.template] : []);
+  },
   overrideManeuver(state, data, choice) {
     const ship = state.ships[data.ship];
     const m = maneuverFor(ship, choice);

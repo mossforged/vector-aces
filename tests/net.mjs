@@ -12,9 +12,9 @@ const tick = () => new Promise(r => setTimeout(r, 0));
 export async function runNetTest(games = 20) {
   for (let g = 0; g < games; g++) {
     const t = new LocalTransport(`net-${g}`, { persist: false });
-    const A = new Session(t, 'league'), B = new Session(t, 'dominion');
+    const A = new Session(t, 'p1'), B = new Session(t, 'p2');
     await t.append({ kind: 'host', faction: 'league', name: 'A', squad: PRESET_SQUADS.league.duo.ships, obstacles: true, seed: 500 + g });
-    await t.append({ kind: 'join', name: 'B', squad: PRESET_SQUADS.dominion.swarm.ships });
+    await t.append({ kind: 'join', faction: 'dominion', name: 'B', squad: PRESET_SQUADS.dominion.swarm.ships });
     await tick();
     let rng = g + 1; const r = () => ((rng = (rng * 16807) % 2147483647) / 2147483647);
     for (let i = 0; i < 3000 && !A.state.winner; i++) {

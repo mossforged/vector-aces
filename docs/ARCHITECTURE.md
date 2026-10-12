@@ -89,6 +89,32 @@ Unknown kinds render as generic buttons, so new prompt kinds work in the UI with
 - Simultaneous fire: ships destroyed by an equal-skill attacker get `pendingDestroy` and are removed
   when combat moves to a lower skill (`resolvePendingDestroys`).
 
+### Players, factions, content model
+Seats `p1` (bottom edge, host) and `p2` (top edge, guest); `state.players[p] = { faction, name,
+colour, arcColor, edge, points }` (mirror matches get the faction's alt colour for p2). Faction
+belongs to the **pilot** (a chassis can fly for several factions); upgrades may restrict faction,
+ships or base size. Initiative: lower points; ties → the Dominion player, else random.
+
+### Movement, arcs, actions (first-edition set)
+- Bearings: straight, bank, turn, K-turn, Segnor's loop (SL/SR), Tallon roll (TRL/TRR), reverse
+  (RBL/RS/RBR), stationary (ST). `maneuvers.buildPath` = basic template + optional end rotation;
+  a bumped loop/roll/K-turn drops the rotation.
+- Arcs per chassis: front, rear (auxiliary), front180, turret (primary in any direction), bullseye.
+  Primary attacks use whichever arc gives the shortest range; secondary weapons use the front arc
+  unless they are turrets. `Q.inArc` = any arc, `Q.inFrontArc`, `Q.inBullseye`.
+- Actions: focus, lock, roll, boost, evade, SLAM (second same-speed maneuver, then weapons
+  disabled), cloak (+2 agility, no attacks; decloak at the start of Activation), reload (restore a
+  torpedo/missile, weapons disabled), jam (≤2 tokens; each cancels the next focus/evade/lock),
+  coordinate (free action for a friend at Range 1–2), reinforce (fore/aft: −1 hit from that side).
+- Ship tokens: stress, ion, cloaked, jam, tractor (−1 agility; attacker may drag a small ship),
+  disarmed (weapons disabled). Jam/tractor/disarmed clear in the End phase.
+- Ordnance (`engine/ordnance.js`): tokens in `state.ordnance`, dropped behind the ship with the
+  1-straight template. Bombs detonate at the end of Activation (every ship at Range 1); mines
+  detonate when a ship's base or template overlaps them (after moves, boosts, rolls, decloaks,
+  tractor drags). Token look and effects: `data/ordnance.js` + `EFFECTS` in engine/ordnance.js.
+- Condition cards: `ship.conditions = [{ id, from }]`; `hooks.cardsOf` includes them, so a
+  condition is just a card object with hooks.
+
 ## 2. Net (src/net) — one ordered log
 Nothing but **messages** travel between players; each client rebuilds the state by replaying the log
 through the engine. That makes refresh/reconnect free (replay the log) and keeps the protocol tiny.
@@ -122,6 +148,10 @@ Ship art is a function per `art` key in `shipArt.js`; set `IMAGE_OVERRIDES[key] 
 to use a picture instead (standee approach — one image, moved and rotated).
 
 ## 4. UI (src/ui)
+`names.js` implements the "original names" toggle: a MutationObserver swaps themed names for the
+original ones in every text node and title as panels render (and restores them when switched
+off); canvas text goes through `label()`. Per viewer, stored in localStorage; shortcut N.
+
 `diceRoller.js` turns `attackDice`/`defenseDice`/`attackResult`/`roll` events into the on-board
 dice mat (tumble on roll and reroll, flash on change, drop-in for added dice). It keeps a timeline
 `cursor`; app.js holds back modify-dice prompts until the dice have landed. `shipTooltip.js`

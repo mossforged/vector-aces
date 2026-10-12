@@ -12,9 +12,11 @@ export async function runCardSim(games = 600, { quiet = false } = {}) {
   let finished = 0, rounds = 0;
   for (let g = 0; g < games; g++) {
     const rng = mulberry(9000 + g);
-    const squads = { league: await randomSquad('league', rng), dominion: await randomSquad('dominion', rng) };
-    for (const f of Object.values(squads)) for (const e of f) { seen.add(e.pilot); e.upgrades.forEach(u => seen.add(u)); }
-    let s = newGame({ seed: g * 7 + 1, squads, obstacles: g % 2 === 0 });
+    const factions = [...new Set(Object.values(PILOTS).map(p => p.faction))];
+    const f1 = factions[g % factions.length], f2 = factions[Math.floor(g / factions.length) % factions.length];
+    const seats = [{ faction: f1, squad: await randomSquad(f1, rng) }, { faction: f2, squad: await randomSquad(f2, rng) }];
+    for (const st of seats) for (const e of st.squad) { seen.add(e.pilot); e.upgrades.forEach(u => seen.add(u)); }
+    let s = newGame({ seed: g * 7 + 1, seats, obstacles: g % 2 === 0 });
     for (let i = 0; i < 6000 && !s.winner && s.round <= 30; i++) {
       const p = waitingOn(s)[0];
       if (s.prompt?.options) for (const o of s.prompt.options) { const k = o.id.split(':')[0]; offered.set(k, (offered.get(k) || 0) + 1); }

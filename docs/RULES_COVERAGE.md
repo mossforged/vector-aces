@@ -47,6 +47,20 @@ Legend: ✅ implemented · ◐ simplified (note says how) · ⬜ not yet
 - ✅ Concede
 - ⬜ Rule-dispute dice roll-off (not needed digitally)
 
+## Foundation for the remaining small ships
+- ✅ Segnor's loop, Tallon roll, reverse and stationary maneuvers (bumped loops/rolls lose their end rotation)
+- ◐ Tallon roll: base centred on the template end (no sideways alignment choice)
+- ✅ Auxiliary rear and 180° arcs, turret primary weapons, bullseye arc (for card effects)
+- ✅ SLAM, cloak/decloak, reload, jam, coordinate, reinforce, weapons-disabled tokens
+- ◐ Decloak happens at the start of the Activation phase in pilot-skill order (2-straight barrel roll or 2 straight ahead)
+- ◐ Jam token: the jammed ship's next focus, evade or lock is cancelled instead (≤ 2 tokens, cleared in the End phase)
+- ◐ Reinforce: if the attacker's centre is in the reinforced half, 1 hit (else crit) is cancelled when any would land
+- ✅ Tractor beam tokens (−1 agility each; the assigning player may drag a small ship by roll or 1-straight, even onto rocks)
+- ✅ Bombs (seismic, proton, ion, thermal, bomblet) and mines (proximity, snare net, cluster) with drop, detonation and board tokens
+- ◐ Bombs are dropped with the 1-straight template only (no launch templates yet); Bomblet Launcher doesn't take two slots
+- ✅ Condition cards (framework; the cards arrive with the faction batches)
+- ✅ Third faction (Syndicate), mirror matches, per-pilot factions
+
 ## Damage deck (33 cards, 8 pilot / 25 ship, 7 Direct Hit) — all 14 card types implemented
 Direct Hit, Ruptured Plating (−1 agility, repair), Engine Fault (turns red), Thruster Fire (stress, flip),
 Console Blaze (start-of-combat roll, repair), Weapons Fault (−1 attack, repair), Hull Breach (roll after red),
@@ -61,7 +75,7 @@ Head Wound (no pilot ability / elite upgrades).
   cannons, turrets, crew, systems, modifications, one title — all implemented.
 - ◐ Simplified card choices: Commander Ostrava auto-deals the worst of 3 cards; Baron Kessick and
   Loyal Mechanic trigger automatically (always beneficial); Snap Roll removes the first enemy lock.
-- ⬜ Not yet: bombs (slot shown as "coming soon"), large/huge ships, cloaking, two-lock crew, dial-peeking crew.
+- ⬜ Not yet: remaining small ships (three batches, see WORKSTREAMS.md → A), large/huge ships, two-lock crew, dial-peeking crew.
 
 ## Not yet
 - ⬜ Missions (escort, asteroid run, satellites) — see WORKSTREAMS.md

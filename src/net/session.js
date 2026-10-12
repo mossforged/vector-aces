@@ -32,7 +32,7 @@ export function hashDials(dials, salt) {
 export class Session {
   /**
    * @param transport  { append(msg): Promise, subscribe(cb(msg, index)): unsubscribe }
-   * @param me         player id this client controls ('league' | 'dominion'), or 'both' for hotseat
+   * @param me         seat this client controls ('p1' host | 'p2' guest), 'both' for hotseat, or 'spectator'
    */
   constructor(transport, me) {
     this.transport = transport; this.me = me;
@@ -61,11 +61,14 @@ export class Session {
       case 'join': {
         if (this.state || !this.meta) break; // a second guest lost the race
         this.meta.guest = msg;
-        const host = this.meta, other = host.faction === 'league' ? 'dominion' : 'league';
+        const host = this.meta;
+        const guestFaction = msg.faction || (host.faction === 'league' ? 'dominion' : 'league'); // old logs lack it
         this.state = newGame({
           seed: host.seed, obstacles: host.obstacles,
-          squads: { [host.faction]: host.squad, [other]: msg.squad },
-          names: { [host.faction]: host.name, [other]: msg.name },
+          seats: [
+            { faction: host.faction, name: host.name, squad: host.squad },
+            { faction: guestFaction, name: msg.name, squad: msg.squad },
+          ],
         });
         break;
       }

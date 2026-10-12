@@ -1,5 +1,6 @@
 // Lobby: hotseat setup, online host/join, resume. Calls app.start(transport, me) when ready.
 import { FACTIONS } from '../data/factions.js';
+import { PILOTS } from '../data/pilots.js';
 import { PRESET_SQUADS } from '../data/presets.js';
 import { validateSquad } from '../engine/index.js';
 import { LocalTransport, FirebaseTransport, connectFirebase } from '../net/transports.js';
@@ -15,6 +16,30 @@ const store = {
   set: (k, v) => { try { localStorage.setItem(k, v); } catch {} },
 };
 
+const playable = f => Object.values(PILOTS).some(p => p.faction === f);
+const starter = f => clone(PRESET_SQUADS[f]?.intro?.ships || []);
+
+/**
+ * One player's setup: name, faction tabs and squad builder. Keeps a separate draft squad
+ * per faction so switching back and forth doesn't lose work. Returns { get() }.
+ */
+function seatPicker(el, { label, name, faction }) {
+  const drafts = {};
+  const render = () => {
+    drafts[faction] ||= starter(faction);
+    el.innerHTML = `
+      <label>${esc(label)} <input data-name value="${esc(name)}"></label>
+      <div class="tabs small">${Object.values(FACTIONS).map(f => `<button class="tab ${faction === f.id ? 'on' : ''}" data-f="${f.id}" style="--fc:${f.color}" ${playable(f.id) ? '' : 'disabled title="Ships coming soon"'}>${f.short}${playable(f.id) ? '' : ' (soon)'}</button>`).join('')}</div>
+      <p class="muted small faction-blurb">${esc(FACTIONS[faction].blurb)}</p>
+      <div data-sb></div>`;
+    el.querySelector('[data-name]').oninput = e => { name = e.target.value; };
+    el.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { faction = b.dataset.f; render(); });
+    mountSquadBuilder(el.querySelector('[data-sb]'), { faction, squad: drafts[faction] });
+  };
+  render();
+  return { get: () => ({ faction, name: name.trim(), squad: drafts[faction] }) };
+}
+
 export function showLobby(el, app) {
   const params = new URLSearchParams(location.search);
   const code = params.get('game');
@@ -25,7 +50,6 @@ export function showLobby(el, app) {
 
 function homeScreen(el, app) {
   const hasHotseat = (() => { try { return JSON.parse(localStorage.getItem('va-log-hotseat') || '[]').length >= 2; } catch { return false; } })();
-  const squads = { league: clone(PRESET_SQUADS.league.intro.ships), dominion: clone(PRESET_SQUADS.dominion.intro.ships) };
   let mode = 'hotseat';
 
   const render = () => {
@@ -42,8 +66,8 @@ function homeScreen(el, app) {
     el.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { mode = b.dataset.mode; render(); });
     el.querySelector('[data-resume]')?.addEventListener('click', () => app.start(new LocalTransport('hotseat'), 'both'));
     const body = el.querySelector('[data-body]');
-    if (mode === 'hotseat') hotseatForm(body, app, squads);
-    else hostForm(body, app, squads);
+    if (mode === 'hotseat') hotseatForm(body, app);
+    else hostForm(body, app);
   };
   render();
 }
@@ -52,22 +76,21 @@ function optionsBlock() {
   return `<label class="check"><input type="checkbox" data-obst checked> Asteroid field (6 obstacles, placed alternately)</label>`;
 }
 
-function hotseatForm(body, app, squads) {
+function hotseatForm(body, app) {
   body.innerHTML = `
-    <div class="two">
-      <div><label>League player <input data-name="league" value="Player 1"></label><div data-sb="league"></div></div>
-      <div><label>Dominion player <input data-name="dominion" value="Player 2"></label><div data-sb="dominion"></div></div>
-    </div>
+    <div class="two"><div data-seat="1"></div><div data-seat="2"></div></div>
     ${optionsBlock()}
     <button class="btn primary wide" data-start>Start battle</button>
     <p class="err" data-err></p>`;
-  for (const f of ['league', 'dominion']) mountSquadBuilder(body.querySelector(`[data-sb="${f}"]`), { faction: f, squad: squads[f] });
+  const s1 = seatPicker(body.querySelector('[data-seat="1"]'), { label: 'Player 1 (near edge)', name: 'Player 1', faction: 'league' });
+  const s2 = seatPicker(body.querySelector('[data-seat="2"]'), { label: 'Player 2 (far edge)', name: 'Player 2', faction: 'dominion' });
   body.querySelector('[data-start]').onclick = async () => {
-    const errs = [...validateSquad('league', squads.league, 100), ...validateSquad('dominion', squads.dominion, 100)];
+    const a = s1.get(), b = s2.get();
+    const errs = [...validateSquad(a.faction, a.squad, 100).map(e => `Player 1: ${e}`), ...validateSquad(b.faction, b.squad, 100).map(e => `Player 2: ${e}`)];
     if (errs.length) { body.querySelector('[data-err]').textContent = errs[0]; return; }
     const t = new LocalTransport('hotseat'); t.clear();
-    await t.append({ kind: 'host', faction: 'league', name: body.querySelector('[data-name="league"]').value || 'League', squad: squads.league, obstacles: body.querySelector('[data-obst]').checked, seed: randomSeed() });
-    await t.append({ kind: 'join', name: body.querySelector('[data-name="dominion"]').value || 'Dominion', squad: squads.dominion });
+    await t.append({ kind: 'host', faction: a.faction, name: a.name || 'Player 1', squad: a.squad, obstacles: body.querySelector('[data-obst]').checked, seed: randomSeed() });
+    await t.append({ kind: 'join', faction: b.faction, name: b.name || 'Player 2', squad: b.squad });
     app.start(t, 'both');
   };
 }
@@ -80,36 +103,29 @@ function needFirebase(body) {
     <p class="muted">See <code>docs/ONLINE.md</code>. Same-screen play works without any of this.</p></div>`;
 }
 
-function hostForm(body, app, squads) {
+function hostForm(body, app) {
   if (!FIREBASE_CONFIG) return needFirebase(body);
-  let faction = 'league';
-  const render = () => {
-    body.innerHTML = `
-      <label>Your name <input data-name value="${esc(store.get('va-name') || 'Host')}"></label>
-      <div class="tabs small">${Object.values(FACTIONS).map(f => `<button class="tab ${faction === f.id ? 'on' : ''}" data-f="${f.id}" style="--fc:${f.color}">${f.name}</button>`).join('')}</div>
-      <div data-sb></div>
-      ${optionsBlock()}
-      <button class="btn primary wide" data-host>Create game & get invite link</button>
-      <p class="err" data-err></p>`;
-    body.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { faction = b.dataset.f; render(); });
-    mountSquadBuilder(body.querySelector('[data-sb]'), { faction, squad: squads[faction] });
-    body.querySelector('[data-host]').onclick = async () => {
-      const errs = validateSquad(faction, squads[faction], 100);
-      if (errs.length) { body.querySelector('[data-err]').textContent = errs[0]; return; }
-      const name = body.querySelector('[data-name]').value || 'Host';
-      store.set('va-name', name);
-      try {
-        const db = await connectFirebase(FIREBASE_CONFIG);
-        const code = newCode();
-        const t = new FirebaseTransport(db, code);
-        await t.append({ kind: 'host', faction, name, squad: squads[faction], obstacles: body.querySelector('[data-obst]').checked, seed: randomSeed() });
-        store.set(`va-role-${code}`, faction);
-        history.replaceState(null, '', `?game=${code}`);
-        app.start(t, faction);
-      } catch (e) { body.querySelector('[data-err]').textContent = 'Could not reach Firebase: ' + e.message; }
-    };
+  body.innerHTML = `
+    <div data-seat></div>
+    ${optionsBlock()}
+    <button class="btn primary wide" data-host>Create game & get invite link</button>
+    <p class="err" data-err></p>`;
+  const seat = seatPicker(body.querySelector('[data-seat]'), { label: 'Your name', name: store.get('va-name') || 'Host', faction: 'league' });
+  body.querySelector('[data-host]').onclick = async () => {
+    const me = seat.get();
+    const errs = validateSquad(me.faction, me.squad, 100);
+    if (errs.length) { body.querySelector('[data-err]').textContent = errs[0]; return; }
+    store.set('va-name', me.name || 'Host');
+    try {
+      const db = await connectFirebase(FIREBASE_CONFIG);
+      const code = newCode();
+      const t = new FirebaseTransport(db, code);
+      await t.append({ kind: 'host', faction: me.faction, name: me.name || 'Host', squad: me.squad, obstacles: body.querySelector('[data-obst]').checked, seed: randomSeed() });
+      store.set(`va-role-${code}`, 'p1');
+      history.replaceState(null, '', `?game=${code}`);
+      app.start(t, 'p1');
+    } catch (e) { body.querySelector('[data-err]').textContent = 'Could not reach Firebase: ' + e.message; }
   };
-  render();
 }
 
 async function joinScreen(el, app, code) {
@@ -128,22 +144,21 @@ async function joinScreen(el, app, code) {
     return;
   }
   const host = head[0];
-  const faction = host.faction === 'league' ? 'dominion' : 'league';
-  const squad = clone(PRESET_SQUADS[faction].intro.ships);
   body.innerHTML = `
-    <p><b>${esc(host.name)}</b> invites you to fly for the <b style="color:${FACTIONS[faction].color}">${FACTIONS[faction].name}</b>${host.obstacles ? ' in an asteroid field' : ''}.</p>
-    <label>Your name <input data-name value="${esc(store.get('va-name') || 'Guest')}"></label>
-    <div data-sb></div>
+    <p><b>${esc(host.name)}</b> invites you to a battle${host.obstacles ? ' in an asteroid field' : ''}. They fly for the
+      <b style="color:${FACTIONS[host.faction].color}">${FACTIONS[host.faction].name}</b>. Pick your side and squad:</p>
+    <div data-seat></div>
     <button class="btn primary wide" data-join>Join battle</button><p class="err" data-err></p>`;
-  mountSquadBuilder(body.querySelector('[data-sb]'), { faction, squad });
+  const seat = seatPicker(body.querySelector('[data-seat]'), { label: 'Your name', name: store.get('va-name') || 'Guest',
+    faction: host.faction === 'dominion' ? 'league' : 'dominion' });
   body.querySelector('[data-join]').onclick = async () => {
-    const errs = validateSquad(faction, squad, 100);
+    const me = seat.get();
+    const errs = validateSquad(me.faction, me.squad, 100);
     if (errs.length) { body.querySelector('[data-err]').textContent = errs[0]; return; }
-    const name = body.querySelector('[data-name]').value || 'Guest';
-    store.set('va-name', name);
+    store.set('va-name', me.name || 'Guest');
     const t = new FirebaseTransport(db, code);
-    await t.append({ kind: 'join', name, squad });
-    store.set(`va-role-${code}`, faction);
-    app.start(t, faction);
+    await t.append({ kind: 'join', faction: me.faction, name: me.name || 'Guest', squad: me.squad });
+    store.set(`va-role-${code}`, 'p2');
+    app.start(t, 'p2');
   };
 }

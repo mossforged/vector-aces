@@ -39,6 +39,13 @@ export function sufferDamage(state, ship, hits, crits = 0, opts = {}) {
   }
 }
 
+/** Deal a Damage card straight to the hull (ignores shields), e.g. proton bombs. */
+export function dealDamageCard(state, ship, faceup = true) {
+  if (ship.destroyed) return;
+  dealCard(state, ship, faceup, {});
+  checkDestroyed(state, ship);
+}
+
 function dealCard(state, ship, crit, opts) {
   const deckEmpty = !state.damageDeck.length && !state.damageDiscard.length;
   let card = drawCard(state);
