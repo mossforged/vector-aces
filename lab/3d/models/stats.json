@@ -1,12 +1,12 @@
 {
- "asteroid": {
-  "tris": 1280,
-  "materials": 2,
+ "lancer": {
+  "tris": 11308,
+  "materials": 8,
   "size_mm": [
-   63.2,
-   55.0,
-   44.7
+   33.0,
+   35.2,
+   5.6
   ],
-  "kb": 46
+  "kb": 1045
  }
 }

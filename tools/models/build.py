@@ -63,10 +63,12 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True); PREV.mkdir(exist_ok=True)
     report = {}
     for name in args or SHIPS:
-        faction, recipe = SHIPS[name]
+        faction, recipe, *opts = SHIPS[name]
         kit.reset(faction)
         recipe()
         ship = kit.finish(name)
+        if opts:   # baked paint layer: recess wash, panel lines, edge wear, grime, scorch
+            kit.bake_paint(ship, scorch=opts[0].get('scorch', ()), path=PREV / f'{name}_paint.png')
         st = kit.stats(ship)
         kit.export_glb(ship, OUT / f'{name}.glb')
         st['kb'] = round((OUT / f'{name}.glb').stat().st_size / 1024)

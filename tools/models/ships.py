@@ -2,13 +2,13 @@
 nose toward -Y) and is built only from kit parts."""
 import math
 from kit import (loft, loft_top, slab, cyl, cone, beam, blob, box, engine, cannon, canopy,
-                 stripe, mirror, rock)
+                 stripe, mirror, rock, vents, hatch, pipe, antenna, decal_text)
 
 SIDES = (1, -1)
 
 
-def lancer():
-    """League Lancer: forward-swept dart, long nose, twin rear thrusters."""
+def lancer_v1():
+    """League Lancer, first test version (kept for comparison)."""
     body = [(-18.6, 0.5, -0.2, 0.5), (-15, 1.5, -0.9, 1.2), (-9, 2.8, -1.5, 2.0), (-2, 3.5, -1.8, 2.5),
             (5, 3.9, -1.8, 2.3), (11.5, 3.6, -1.5, 1.8), (12.6, 2.6, -1.0, 1.2)]
     loft('fuselage', body, 'paint', squareness=3.0)
@@ -31,6 +31,58 @@ def lancer():
         engine((s * 5.6, 11.3, 0.25), 1.95, 8.2)
         box('engine pylon', (s * 4.4, 10.4, 0.2), (1.6, 4.0, 1.2), 'trim', 0.15)
     cyl('nose sensor', (0, -18.7, 0.12), 0.18, 0.4, 'glow', n=8, bevel=0)
+
+
+def lancer():
+    """League Lancer: forward-swept dart, long nose, twin rear thrusters. Detailed version."""
+    body = [(-18.6, 0.5, -0.2, 0.5), (-15, 1.5, -0.9, 1.2), (-9, 2.8, -1.5, 2.0), (-2, 3.5, -1.8, 2.5),
+            (5, 3.9, -1.8, 2.3), (11.5, 3.6, -1.5, 1.8), (12.6, 2.6, -1.0, 1.2)]
+    loft('fuselage', body, 'paint', squareness=3.0)
+    top = lambda x, y: loft_top(body, y)
+    slope = lambda y: math.atan((loft_top(body, y + 0.5) - loft_top(body, y - 0.5)))
+    loft('nose cap', [(-18.9, 0.35, -0.12, 0.42), (-17.2, 1.0, -0.55, 0.85), (-15.4, 1.62, -0.98, 1.27)], 'accent', squareness=3.0)
+    for s in SIDES:
+        stripe([(s * 0.5, -16.6), (s * 1.0, -16.6), (s * 1.25, -7.4), (s * 0.75, -7.4)], top, lift=0.1)
+        # side air intakes and nose cheek sensors
+        box('intake frame', (s * 3.45, -0.4, 0.15), (0.8, 5.6, 2.1), 'trim', 0.12)
+        box('intake mouth', (s * 3.78, -0.4, 0.15), (0.3, 4.9, 1.5), 'dark', 0.04)
+        for k in range(4):
+            box('intake vane', (s * 3.9, -2.4 + k * 1.3, 0.15), (0.12, 0.18, 1.4), 'steel', 0)
+        box('cheek sensor', (s * 1.45, -14.2, -0.1), (0.5, 1.6, 0.7), 'trim', 0.1)
+        cyl('cheek lens', (s * 1.62, -15.05, -0.1), 0.2, 0.15, 'glow', n=8, bevel=0)
+    # canopy with a dark coaming, armoured hatches along the spine, vents and an aerial
+    stripe([(-2.05, -7.9), (2.05, -7.9), (2.25, 0.9), (-2.25, 0.9)], top, mat='trim', lift=0.0, thick=0.32)
+    canopy(-7.2, 0.2, loft_top(body, -3) - 0.2, 1.75, 1.35)
+    blob('pilot helmet', (0, -2.3, loft_top(body, -2.3) + 0.35), (0.62, 0.7, 0.6), 'paint', n=12)
+    hatch((0, -12.2, top(0, -12.2) + 0.03), (1.7, 2.4), tilt=(slope(-12.2), 0, 0))
+    hatch((0, -10.0, top(0, -10.0) + 0.03), (1.9, 1.6), tilt=(slope(-10.0), 0, 0))
+    vents((0, 3.6, top(0, 3.6) + 0.1), 5, 0.6, (1.8, 0.32, 0.3))
+    hatch((0, 7.6, top(0, 7.6) + 0.03), (2.6, 2.0), mat='accent')
+    antenna((0.9, 5.6, top(0, 5.6)), (1.25, 8.4, top(0, 8.4) + 1.6))
+    box('tail cap', (0, 12.75, 0.25), (4.4, 0.6, 2.4), 'trim', 0.15)
+    for k in range(3):
+        box('tail vent', (-1.2 + k * 1.2, 13.06, 0.25), (0.7, 0.1, 1.4), 'dark', 0)
+    for s in SIDES:
+        # forward-swept wing with armour plates, a hydraulic line and a chrome leading edge
+        wing = [(s * 3, 4), (s * 16, -2), (s * 15.5, 3), (s * 4, 10)]
+        thick = lambda x, y: 0.55 - 0.025 * abs(x)
+        wtop = lambda x, y: -0.2 + thick(x, y)
+        slab('wing', wing, lambda x, y: -0.2 - thick(x, y), wtop, 'paint', 0.15)
+        stripe([(s * 11.5, 0.3), (s * 13.2, -0.6), (s * 13.2, 4.3), (s * 11.5, 5.3)], wtop, lift=0.03)
+        stripe([(s * 13.7, -0.9), (s * 14.1, -1.1), (s * 14.1, 3.9), (s * 13.7, 4.1)], wtop, lift=0.03)
+        hatch((s * 7.6, 4.6, wtop(7.6, 0) + 0.05), (2.6, 3.4))
+        hatch((s * 10.0, 3.6, wtop(10, 0) + 0.05), (1.5, 2.0), bolts=False, mat='trim')
+        decal_text('4', (s * 7.6, 4.6, wtop(7.6, 0) + 0.16), 1.7, 'accent', rot=(0, 0, math.pi))
+        beam('leading edge', (s * 3.3, 3.75, -0.2), (s * 15.8, -1.95, -0.2), 0.13, 'chrome', n=6)
+        pipe([(s * 4.6, 9.1, wtop(4.6, 0) + 0.12), (s * 9.5, 6.2, wtop(9.5, 0) + 0.12), (s * 14.2, 3.4, wtop(14.2, 0) + 0.12)], 0.12)
+        slab('wing root fairing', [(s * 3.2, 3.2), (s * 6.2, 2.2), (s * 6.2, 6.6), (s * 3.2, 7.4)], -1.0, 0.85, 'trim', 0.2)
+        vents((s * 4.7, 4.7, 0.95), 3, 0.7, (1.2, 0.3, 0.2))
+        cannon((s * 15.9, 0.2, -0.2), 6.0, r=0.3, housing=0.62, detail=True)
+        engine((s * 5.6, 11.3, 0.25), 1.95, 8.2, detail=True)
+        box('engine pylon', (s * 4.4, 10.4, 0.2), (1.6, 4.0, 1.2), 'trim', 0.15)
+        pipe([(s * 3.9, 8.0, 1.0), (s * 4.6, 8.6, 1.9), (s * 4.6, 12.5, 2.05)], 0.14, mat='chrome')
+    cyl('nose sensor', (0, -18.7, 0.12), 0.18, 0.4, 'glow', n=8, bevel=0)
+
 
 
 def wasp():
@@ -114,5 +166,6 @@ def asteroid(seed=1):
     rock('asteroid', 30, seed)
 
 
-SHIPS = {'lancer': ('league', lancer), 'wasp': ('dominion', wasp), 'raptor': ('syndicate', raptor),
+LANCER_SCORCH = [((x, 15.6, 0.25), 4.2) for x in (5.6, -5.6)] + [((x, -7.2, -0.2), 2.4) for x in (15.9, -15.9)]
+SHIPS = {'lancer': ('league', lancer, {'scorch': LANCER_SCORCH}), 'lancer_v1': ('league', lancer_v1), 'wasp': ('dominion', wasp), 'raptor': ('syndicate', raptor),
          'asteroid': ('league', asteroid)}

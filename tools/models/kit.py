@@ -226,27 +226,42 @@ def box(name, p, size, mat, bevel=0.15):
 
 
 # ---------------------------------------------------------------- assemblies
-def engine(p, r, length, casing='accent', n=20):
+def engine(p, r, length, casing='accent', n=20, detail=False):
     """Hot-rod thruster facing +Y: painted casing, chrome bands, recessed glowing nozzle.
-    p = centre of the casing."""
+    p = centre of the casing. detail=True adds an intake fan, heat-sink rings and nozzle petals."""
     x, y, z = p
     y0, y1 = y - length / 2, y + length / 2
     cyl('engine casing', (x, y - 0.1 * length, z), r, length * 0.8, casing, n=n, bevel=0.15)
     cyl('engine band', (x, y0 + 0.3 * length, z), r * 1.06, length * 0.08, 'chrome', n=n, bevel=0.05)
     cyl('engine collar', (x, y1 - 0.12 * length, z), r * 1.02, length * 0.24, 'chrome', n=n, bevel=0.1)
-    cyl('engine intake', (x, y0 - 0.02, z), r * 0.72, 0.15, 'dark', n=n, bevel=0)
+    if detail:
+        intake_fan((x, y0 - 0.05, z), r * 0.98)
+        for k in range(4):
+            cyl('heat sink', (x, y1 - 0.3 * length + k * 0.42, z), r * 1.08, 0.18, 'dark', n=n, bevel=0)
+        exhaust_petals((x, y1 + 0.02, z), r * 0.92)
+    else:
+        cyl('engine intake', (x, y0 - 0.02, z), r * 0.72, 0.15, 'dark', n=n, bevel=0)
     cyl('nozzle well', (x, y1 + 0.01, z), r * 0.82, 0.12, 'dark', n=n, bevel=0)
     cyl('nozzle glow', (x, y1 + 0.03, z), r * 0.62, 0.12, 'glow', n=n, bevel=0)
     cyl('nozzle cone', (x, y1 + 0.06, z), r * 0.28, 0.14, 'steel', n=12, bevel=0)
 
 
-def cannon(p, length, r=0.32, housing=0.75, mat='paint'):
-    """Gun pointing -Y from p: painted housing, steel barrel, chrome muzzle."""
+def cannon(p, length, r=0.32, housing=0.75, mat='paint', detail=False):
+    """Gun pointing -Y from p: painted housing, steel barrel, chrome muzzle.
+    detail=True adds cooling rings, a vented flash suppressor and a rear power coupling."""
     x, y, z = p
     cyl('gun housing', (x, y, z), housing, 2.4, mat, n=12, bevel=0.15)
     cyl('gun barrel', (x, y - 1.2 - length / 2, z), r, length, 'steel', n=10, bevel=0)
     cyl('gun muzzle', (x, y - 1.2 - length + 0.3, z), r * 1.5, 0.7, 'chrome', n=10, bevel=0.05)
     cyl('gun bore', (x, y - 1.2 - length - 0.02, z), r * 0.6, 0.08, 'dark', n=8, bevel=0)
+    if detail:
+        for k in range(3):
+            cyl('barrel ring', (x, y - 1.6 - k * 0.45, z), r * 1.45, 0.2, 'dark', n=10, bevel=0)
+        cyl('barrel jacket', (x, y - 1.2 - length * 0.55, z), r * 1.2, length * 0.25, 'trim', n=10, bevel=0.03)
+        for k in range(4):
+            a = math.tau * k / 4 + math.pi / 4
+            box('suppressor slot', (x + math.cos(a) * r * 1.42, y - 1.2 - length + 0.35, z + math.sin(a) * r * 1.42), (0.12, 0.5, 0.12), 'dark', 0)
+        cyl('power coupling', (x, y + 1.35, z), housing * 0.7, 0.4, 'chrome', n=12, bevel=0.04)
 
 
 def canopy(y_front, y_back, z_base, half_w, height, frame='chrome'):
@@ -296,6 +311,200 @@ def rock(name, radius, seed, lumps=0.35):
     return o
 
 
+# ---------------------------------------------------------------- detail parts ("greebles")
+def vents(p, n, pitch, size, axis='Y', mat='dark', frame='trim'):
+    """A bank of n slots along an axis, set in a raised frame. size = (w, l, h) of one slot."""
+    x, y, z = p
+    w, l, h = size
+    span = pitch * (n - 1) + l
+    if axis == 'Y':
+        box('vent frame', (x, y, z - h * 0.3), (w + 0.35, span + 0.35, h), frame, 0.08)
+        for i in range(n):
+            box('vent slot', (x, y - span / 2 + l / 2 + i * pitch, z + h * 0.2), (w, l * 0.55, h * 0.6), mat, 0)
+    else:
+        box('vent frame', (x, y, z - h * 0.3), (span + 0.35, w + 0.35, h), frame, 0.08)
+        for i in range(n):
+            box('vent slot', (x - span / 2 + l / 2 + i * pitch, y, z + h * 0.2), (l * 0.55, w, h * 0.6), mat, 0)
+
+
+def hatch(p, size, mat='paint', bolts=True, tilt=(0, 0, 0)):
+    """Raised access panel with corner bolts."""
+    x, y, z = p
+    w, l = size
+    o = box('hatch', (x, y, z), (w, l, 0.16), mat, 0.05)
+    o.rotation_euler = tilt
+    if bolts:
+        for bx in (-1, 1):
+            for by in (-1, 1):
+                b = cyl('bolt', (x + bx * (w / 2 - 0.22), y + by * (l / 2 - 0.22), z + 0.09), 0.09, 0.08, 'steel', axis='Z', n=6, bevel=0)
+                b.rotation_euler = tilt
+
+
+def pipe(points, r, mat='steel', n=8):
+    """A pipe run through a list of points, with a collar at each bend."""
+    for a, b in zip(points, points[1:]):
+        beam('pipe', a, b, r, mat, n)
+    for q in points[1:-1]:
+        blob('pipe joint', q, (r * 1.35,) * 3, mat, n=8)
+
+
+def intake_fan(p, r, vanes=12, axis_dir=-1):
+    """Engine intake facing -Y (axis_dir=-1): chrome lip, dark throat, spinner and angled fan blades."""
+    x, y, z = p
+    cyl('intake lip', (x, y, z), r * 1.02, 0.35, 'chrome', n=24, bevel=0.06)
+    cyl('intake throat', (x, y + 0.25 * -axis_dir, z), r * 0.86, 0.3, 'dark', n=24, bevel=0)
+    blob('spinner', (x, y + axis_dir * 0.1, z), (r * 0.26, r * 0.32, r * 0.26), 'steel', n=12)
+    for i in range(vanes):
+        a = math.tau * i / vanes
+        beam('fan blade', (x + math.cos(a) * r * 0.25, y + axis_dir * 0.05, z + math.sin(a) * r * 0.25),
+             (x + math.cos(a + 0.35) * r * 0.82, y + axis_dir * 0.05, z + math.sin(a + 0.35) * r * 0.82), r * 0.07, 'steel', n=4)
+
+
+def exhaust_petals(p, r, petals=12):
+    """Ring of nozzle petals flaring out behind an exhaust facing +Y."""
+    x, y, z = p
+    for i in range(petals):
+        a = math.tau * i / petals
+        beam('nozzle petal', (x + math.cos(a) * r * 0.95, y, z + math.sin(a) * r * 0.95),
+             (x + math.cos(a) * r * 0.78, y + r * 0.45, z + math.sin(a) * r * 0.78), r * 0.11, 'steel', n=4)
+
+
+def antenna(base, top, r=0.08):
+    beam('antenna', base, top, r, 'steel', n=6)
+    blob('antenna tip', top, (r * 1.8,) * 3, 'glow', n=8)
+
+
+def decal_text(text, p, size, mat='trim', rot=(0, 0, 0), thick=0.05):
+    """Raised lettering (squadron numbers, hull codes), converted to a mesh."""
+    cu = bpy.data.curves.new('decal', 'FONT')
+    cu.body = text; cu.size = size; cu.align_x = 'CENTER'; cu.align_y = 'CENTER'; cu.extrude = thick / 2
+    o = bpy.data.objects.new('decal', cu)
+    bpy.context.scene.collection.objects.link(o)
+    o.location = p; o.rotation_euler = rot
+    bpy.ops.object.select_all(action='DESELECT')
+    bpy.context.view_layer.objects.active = o; o.select_set(True)
+    bpy.ops.object.convert(target='MESH')
+    o = bpy.context.view_layer.objects.active
+    o.data.materials.clear(); o.data.materials.append(M[mat])
+    o['bevel'] = 0
+    return o
+
+
+# ---------------------------------------------------------------- baked paint layer
+def _n(nt, kind, **props):
+    node = nt.nodes.new(kind)
+    for k, v in props.items():
+        setattr(node, k, v)
+    return node
+
+
+def _paint_shader(mat, scorch, panel=(0.28, 0.16, 0.28), wear=1.0):
+    """Swap a material's output for an emission shader that computes its painted look:
+    base colour x recess wash (AO) x panel lines x grime x scorch, plus worn, lighter edges."""
+    nt = mat.node_tree; L = nt.links.new
+    pr = nt.nodes['Principled BSDF']
+    base = tuple(pr.inputs['Base Color'].default_value)
+    metal = pr.inputs['Metallic'].default_value
+    tc = _n(nt, 'ShaderNodeTexCoord')
+    geo = _n(nt, 'ShaderNodeNewGeometry')
+    mul = lambda a, b: _math(nt, 'MULTIPLY', a, b)
+    # recess wash: ambient occlusion
+    ao = _n(nt, 'ShaderNodeAmbientOcclusion', samples=16, only_local=True)
+    ao.inputs['Distance'].default_value = 1.4
+    ao_t = _range(nt, ao.outputs['AO'], 0, 1, 0.22, 1)
+    # panel lines: plate seams in object space (plates are longer along the hull)
+    sc = _n(nt, 'ShaderNodeVectorMath', operation='MULTIPLY'); sc.inputs[1].default_value = panel
+    L(tc.outputs['Object'], sc.inputs[0])
+    vor = _n(nt, 'ShaderNodeTexVoronoi', feature='DISTANCE_TO_EDGE', voronoi_dimensions='3D')
+    vor.inputs['Scale'].default_value = 1.0; vor.inputs['Randomness'].default_value = 0.35
+    L(sc.outputs[0], vor.inputs['Vector'])
+    line_t = _range(nt, vor.outputs['Distance'], 0.0, 0.03, 0.42, 1)
+    # grime: soft blotches
+    noi = _n(nt, 'ShaderNodeTexNoise'); noi.inputs['Scale'].default_value = 0.16; noi.inputs['Detail'].default_value = 6
+    L(tc.outputs['Object'], noi.inputs['Vector'])
+    grime_t = _range(nt, noi.outputs['Fac'], 0.3, 0.75, 0.86 if metal < 0.8 else 0.93, 1.0)
+    shade = mul(mul(ao_t, line_t), grime_t)
+    # scorch around exhausts and muzzles
+    for (pt, radius) in scorch:
+        d = _n(nt, 'ShaderNodeVectorMath', operation='DISTANCE'); d.inputs[1].default_value = pt
+        L(tc.outputs['Object'], d.inputs[0])
+        shade = mul(shade, _range(nt, d.outputs['Value'], 0, radius, 0.12, 1))
+    # worn edges: convex edges show lighter bare metal, broken up by noise
+    edge = _range(nt, geo.outputs['Pointiness'], 0.5, 0.56, 0, 1)
+    chips = _n(nt, 'ShaderNodeTexNoise'); chips.inputs['Scale'].default_value = 1.6; chips.inputs['Detail'].default_value = 8
+    L(tc.outputs['Object'], chips.inputs['Vector'])
+    edge = mul(edge, _range(nt, chips.outputs['Fac'], 0.42, 0.6, 0.25, 1.0))
+    # candy paint chips less visibly than ivory; polished metal hardly at all
+    edge = mul(edge, 0.55 * wear * (0.5 if metal > 0.8 else 0.35 if mat.name == 'accent' else 1.0))
+    col = _n(nt, 'ShaderNodeVectorMath', operation='SCALE')
+    col.inputs[0].default_value = base[:3]
+    L(shade, col.inputs['Scale'])
+    hi = _n(nt, 'ShaderNodeVectorMath', operation='SCALE'); hi.inputs[0].default_value = (0.55, 0.55, 0.56)
+    L(edge, hi.inputs['Scale'])
+    add = _n(nt, 'ShaderNodeVectorMath', operation='ADD')
+    L(col.outputs[0], add.inputs[0]); L(hi.outputs[0], add.inputs[1])
+    em = _n(nt, 'ShaderNodeEmission')
+    L(add.outputs[0], em.inputs['Color'])
+    out = nt.nodes['Material Output']
+    L(em.outputs[0], out.inputs['Surface'])
+    return pr, out
+
+
+def _math(nt, op, a, b):
+    m = _n(nt, 'ShaderNodeMath', operation=op)
+    for i, v in enumerate((a, b)):
+        if isinstance(v, (int, float)):
+            m.inputs[i].default_value = v
+        else:
+            nt.links.new(v, m.inputs[i])
+    return m.outputs[0]
+
+
+def _range(nt, src, a, b, c, d):
+    r = _n(nt, 'ShaderNodeMapRange', clamp=True)
+    r.inputs['From Min'].default_value = a; r.inputs['From Max'].default_value = b
+    r.inputs['To Min'].default_value = c; r.inputs['To Max'].default_value = d
+    nt.links.new(src, r.inputs['Value'])
+    return r.outputs['Result']
+
+
+def bake_paint(ship, size=2048, scorch=(), samples=20, wear=1.0, path=None):
+    """Unwrap the ship and bake the painted look into one colour texture shared by all its materials."""
+    bpy.ops.object.select_all(action='DESELECT')
+    bpy.context.view_layer.objects.active = ship; ship.select_set(True)
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.uv.smart_project(angle_limit=math.radians(55), island_margin=0.003)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    img = bpy.data.images.new(ship.name + '_paint', size, size)
+    sc = bpy.context.scene
+    sc.render.engine = 'CYCLES'; sc.cycles.device = 'CPU'; sc.cycles.samples = samples
+    restore = []
+    for mat in ship.data.materials:
+        nt = mat.node_tree
+        if mat.name in ('glow', 'glass'):   # these keep their own look
+            continue
+        pr, out = _paint_shader(mat, scorch, wear=wear)
+        tex = _n(nt, 'ShaderNodeTexImage', image=img)
+        nt.nodes.active = tex
+        restore.append((mat, pr, out, tex))
+    for mat in ship.data.materials:
+        if mat.name in ('glow', 'glass'):   # their faces still need an active image to bake into
+            tex = _n(mat.node_tree, 'ShaderNodeTexImage', image=img); mat.node_tree.nodes.active = tex
+    bpy.ops.object.bake(type='EMIT', margin=6, use_clear=True)
+    for mat, pr, out, tex in restore:
+        nt = mat.node_tree
+        nt.links.new(pr.outputs[0], out.inputs['Surface'])
+        nt.links.new(tex.outputs['Color'], pr.inputs['Base Color'])
+    for mat in ship.data.materials:
+        if mat.name in ('glow', 'glass'):
+            for nd in [x for x in mat.node_tree.nodes if x.type == 'TEX_IMAGE']:
+                mat.node_tree.nodes.remove(nd)
+    if path:
+        img.filepath_raw = str(path); img.file_format = 'PNG'; img.save()
+    return img
+
+
 # ---------------------------------------------------------------- finish + export
 def finish(name):
     """Apply bevels, then merge everything into one mesh (one draw call per material)."""
@@ -342,4 +551,5 @@ def export_glb(o, path):
     bpy.ops.object.select_all(action='DESELECT')
     o.select_set(True)
     bpy.ops.export_scene.gltf(filepath=str(path), export_format='GLB', use_selection=True,
-                              export_apply=True, export_yup=True, export_materials='EXPORT')
+                              export_apply=True, export_yup=True, export_materials='EXPORT',
+                              export_image_format='JPEG', export_jpeg_quality=88)
