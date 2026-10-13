@@ -12,8 +12,19 @@ import { shipList, pilot, obstaclePolys, overlapsAnyShip, effectiveSkill, shipNa
 
 export const ENGINE_VERSION = 2;
 
+/** Points for one ship: pilot + upgrades, with `discount: { slot, amount }` cards lowering other upgrades (min 0). */
+export function entryPoints(e) {
+  const ups = (e.upgrades || []).filter(u => UPGRADES[u]);
+  const discounts = ups.map(u => UPGRADES[u].discount).filter(Boolean);
+  return PILOTS[e.pilot].cost + ups.reduce((m, u) => {
+    let c = UPGRADES[u].cost;
+    for (const d of discounts) if (UPGRADES[u].slot === d.slot) c = Math.max(0, c - d.amount);
+    return m + c;
+  }, 0);
+}
+
 export function squadPoints(squad) {
-  return squad.reduce((n, e) => n + PILOTS[e.pilot].cost + (e.upgrades || []).reduce((m, u) => m + UPGRADES[u].cost, 0), 0);
+  return squad.reduce((n, e) => n + entryPoints(e), 0);
 }
 
 /**
@@ -21,8 +32,9 @@ export function squadPoints(squad) {
  * fitted upgrades (`grants: ['elite']`, e.g. a drone that adds an Elite slot).
  */
 export function slotsFor(pilotId, upgradeIds = []) {
-  const slots = PILOTS[pilotId].slots.slice();
+  let slots = PILOTS[pilotId].slots.slice();
   for (const u of upgradeIds) for (const g of UPGRADES[u]?.grants || []) slots.push(g);
+  for (const u of upgradeIds) for (const r of UPGRADES[u]?.removes || []) slots = slots.filter(x => x !== r); // e.g. a title that strips missile slots
   return slots;
 }
 
@@ -34,6 +46,8 @@ export function upgradeAllowed(pilotId, upgradeId, upgradeIds = []) {
   if (u.sizes && !u.sizes.includes(ch.size)) return false;
   if (u.minSkill && p.skill < u.minSkill) return false;
   if (u.noSlot && p.slots.includes(u.noSlot)) return false;
+  if (u.maxHull && ch.hull > u.maxHull) return false;
+  if (u.maxAgility !== undefined && ch.agility > u.maxAgility) return false;
   return slotsFor(pilotId, upgradeIds.filter(x => x !== upgradeId)).includes(u.slot);
 }
 

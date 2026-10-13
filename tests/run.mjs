@@ -182,3 +182,4 @@ const sim = await runCardSim(250);
 assert.equal(sim.never.length, 0, `cards never drafted: ${sim.never}`);
 console.log('  ✓ 250 random-squad games ran without rule errors');
 await import('./batch-league.mjs');
+await import('./batch-dominion.mjs');

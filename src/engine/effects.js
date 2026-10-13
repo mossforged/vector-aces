@@ -1,7 +1,7 @@
 // Shared building blocks for rules modules and cards: token changes that trigger
 // card events, and ready-made dice-option builders.
 import { push, log, emit } from './flow.js';
-import { ownSteps, flag } from './hooks.js';
+import { ownSteps, flag, everyone } from './hooks.js';
 import { shipName } from './queries.js';
 import { rollFace } from './dice.js';
 
@@ -16,7 +16,7 @@ export function addStress(state, ship, n = 1) {
 
 export function spendFocus(state, ship) {
   ship.tokens.focus--;
-  push(state, ...ownSteps(state, ship, 'onSpendFocus'));
+  push(state, ...ownSteps(state, ship, 'onSpendFocus'), ...everyone(state, 'anySpendFocus', ship));
 }
 
 export function spendLock(state, ship) {

@@ -19,13 +19,15 @@ import {
 } from './queries.js';
 import { spendFocus, spendLock, attackRerollAllowed, attackFocusAllowed, rerollOptions, once, mark } from './effects.js';
 
-const STAGE_KIND = { preRoll: 'attackPrep', afterRoll: 'modAttack', defOnAttack: 'modAttackDef', attack: 'modAttack', defense: 'modDefense', onHit: 'onHit' };
+const STAGE_KIND = { preRoll: 'attackPrep', afterRoll: 'modAttack', defOnAttack: 'modAttackDef', attack: 'modAttack', atkOnDefense: 'modDefenseAtk', defense: 'modDefense', onHit: 'onHit' };
 const STAGE_TEXT = {
   preRoll: 'Before rolling: use any effects?', afterRoll: 'After rolling: use any effects?',
-  defOnAttack: 'Modify the attacker’s dice?', attack: 'Modify your attack dice.', defense: 'Modify your defense dice.',
+  defOnAttack: 'Modify the attacker’s dice?', attack: 'Modify your attack dice.', atkOnDefense: 'Modify the defender’s dice?', defense: 'Modify your defense dice.',
   onHit: 'The attack hits. Use any effects?',
 };
-const ATTACKER_STAGES = ['preRoll', 'afterRoll', 'attack'];
+const ATTACKER_STAGES = ['preRoll', 'afterRoll', 'attack', 'atkOnDefense'];
+// Stages where a side modifies its OWN dice (blocked by blockMods effects).
+const OWN_MOD = { attack: 'attacker', defense: 'defender' };
 
 const onObstacle = (state, ship) => !hasFlag(state, ship, 'attackOnObstacle') && obstaclePolys(state).some(o => polygonsIntersect(shipPoly(ship), o));
 const weaponDef = a => (a.weapon === 'primary' ? {} : CARDS[a.weapon]?.weapon || {});
@@ -54,7 +56,8 @@ export function attackOptions(state, ship, { only = null } = {}) {
       const [lo, hi] = fold(state, ship, 'weaponRange', [w.minRange, w.maxRange], w);
       if (geo.band < lo || geo.band > hi) continue;
       let pay = w.cost;
-      if (w.cost === 'lock' && ship.lockOn !== e.id) {
+      if (w.cost === 'lock' && ship.lockOn !== e.id && foldAll(state, 'lockCostWaived', false, ship, e, u.id)) pay = null;
+      else if (w.cost === 'lock' && ship.lockOn !== e.id) {
         if (hasFlag(state, ship, 'lockCostAsFocus') && ship.tokens.focus > 0) pay = 'focus'; else continue;
       }
       if (pay === 'focus' && ship.tokens.focus < 1) continue;
@@ -85,7 +88,7 @@ function beginAttack(state, ship, opt, extra = {}) {
   push(state,
     { t: 'atkStage', stage: 'preRoll' }, { t: 'rollAttack' }, { t: 'atkStage', stage: 'afterRoll' },
     { t: 'atkStage', stage: 'defOnAttack' }, { t: 'atkStage', stage: 'attack' },
-    { t: 'rollDefense' }, { t: 'atkStage', stage: 'defense' },
+    { t: 'rollDefense' }, { t: 'atkStage', stage: 'atkOnDefense' }, { t: 'atkStage', stage: 'defense' },
     { t: 'compareAttack' }, { t: 'atkStage', stage: 'onHit' }, { t: 'dealDamage' }, { t: 'afterAttack' });
 }
 
@@ -94,6 +97,7 @@ function beginAttack(state, ship, opt, extra = {}) {
 function coreOptions(state, a, stage) {
   const atk = state.ships[a.attacker], def = state.ships[a.defender];
   const opts = [];
+  const deny = (ship, ctx) => foldAll(state, 'denyTokens', false, ship, ctx, a);
   if (stage === 'attack') {
     if (atk.lockOn === a.defender && once(a, 'lock') && attackRerollAllowed(state, a) && !atk.round.noTokenMods && !weaponDef(a).onlyFocusMods) {
       for (const o of rerollOptions(a, 'lock', 'Spend lock', 'attack', ['blank', 'focus'], Infinity)) {
@@ -101,7 +105,7 @@ function coreOptions(state, a, stage) {
         opts.push({ ...o, apply(st, a2) { apply(st, a2); spendLock(st, st.ships[a2.attacker]); } });
       }
     }
-    if (atk.tokens.focus > 0 && count(a.attackDice, 'focus') && once(a, 'focus') && attackFocusAllowed(state, a) && !atk.round.noTokenMods) {
+    if (atk.tokens.focus > 0 && count(a.attackDice, 'focus') && once(a, 'focus') && attackFocusAllowed(state, a) && !atk.round.noTokenMods && !deny(atk, 'attackFocus')) {
       opts.push({ id: 'focus', label: 'Spend focus: all focus → hit', apply(st, a2) {
         for (const d of a2.attackDice) if (d.face === 'focus') d.face = 'hit';
         mark(a2, 'focus'); spendFocus(st, st.ships[a2.attacker]);
@@ -109,13 +113,13 @@ function coreOptions(state, a, stage) {
     }
   }
   if (stage === 'defense') {
-    if (def.tokens.focus > 0 && count(a.defenseDice, 'focus') && once(a, 'dfocus')) {
+    if (def.tokens.focus > 0 && count(a.defenseDice, 'focus') && once(a, 'dfocus') && !deny(def, 'defenseFocus')) {
       opts.push({ id: 'dfocus', label: 'Spend focus: all focus → evade', apply(st, a2) {
         for (const d of a2.defenseDice) if (d.face === 'focus') d.face = 'evade';
         mark(a2, 'dfocus'); spendFocus(st, st.ships[a2.defender]);
       } });
     }
-    if (def.tokens.evade > 0 && !weaponDef(a).noEvadeTokens) {
+    if (def.tokens.evade > 0 && !weaponDef(a).noEvadeTokens && !deny(def, 'evadeToken')) {
       opts.push({ id: `devade${def.tokens.evade}`, label: 'Spend evade: add an evade', apply(st, a2) {
         a2.defenseDice.push({ face: 'evade', rerolled: false, added: true }); st.ships[a2.defender].tokens.evade--;
       } });
@@ -128,6 +132,9 @@ export function stageOptions(state, stage) {
   const a = state.attack; if (!a) return { player: null, options: [] };
   const atk = state.ships[a.attacker], def = state.ships[a.defender];
   const player = ATTACKER_STAGES.includes(stage) ? atk.owner : def.owner;
+  // blockMods: a card says this side can't modify its own dice in this attack.
+  if (OWN_MOD[stage] && foldAll(state, 'blockMods', false, a, OWN_MOD[stage])) return { player, options: [] };
+  if (stage !== 'preRoll' && ATTACKER_STAGES.includes(stage) && weaponDef(a).noAttackMods) return { player, options: [] };
   const options = [...coreOptions(state, a, stage)];
   // onlyFocusMods weapons: the attacker may modify its dice only by spending focus normally.
   const focusOnly = ATTACKER_STAGES.includes(stage) && weaponDef(a).onlyFocusMods;
@@ -169,6 +176,10 @@ export const steps = {
     if (ship.destroyed || state.winner) return;
     state.combatSkill = sk;
     if (ship.round.attacked || ship.round.noMoreAttacks) return;
+    if (!s.watched) { // "when a ship becomes the active ship during the Combat phase" effects run first
+      const pre = everyone(state, 'combatActive', ship);
+      if (pre.length) { push(state, ...pre, { t: 'attackStep', ship: ship.id, watched: true }); return; }
+    }
     if (onObstacle(state, ship)) { ship.round.attacked = true; log(state, `${shipName(ship)} is sitting on an asteroid and cannot attack.`); return; }
     const opts = attackOptions(state, ship);
     if (!opts.length) { ship.round.attacked = true; return; }
@@ -222,6 +233,7 @@ export const steps = {
     }
     a.attackDice = rollDice(state, 'attack', Math.max(0, n));
     weaponDef(a).afterRollForced?.(state, a);
+    for (const s of liveShips(state)) for (const c of cardsOf(s)) c.afterRollForced?.(state, s, a, 'attack');
     emit(state, { type: 'attackDice', dice: a.attackDice.map(d => ({ ...d })), roll: true, attacker: a.attacker, defender: a.defender, band: a.band, weapon: a.weapon, obstructed: a.obstructed });
     log(state, `${shipName(atk)} attacks ${shipName(def)} at Range ${a.band}: rolls ${a.attackDice.map(d => d.face).join(', ') || 'nothing'}.`);
   },
@@ -232,6 +244,7 @@ export const steps = {
     if (a.weapon === 'primary' && a.band === 3) n += 1;
     if (a.obstructed) n += 1;
     a.defenseDice = rollDice(state, 'defense', n);
+    for (const s of liveShips(state)) for (const c of cardsOf(s)) c.afterRollForced?.(state, s, a, 'defense');
     emit(state, { type: 'defenseDice', dice: a.defenseDice.map(d => ({ ...d })), roll: true });
     log(state, `${shipName(def)} rolls ${a.defenseDice.map(d => d.face).join(', ') || 'no'} defense dice.`);
   },
@@ -336,7 +349,7 @@ export const choices = {
     push(state, { t: 'atkStage', stage: data.stage });
     opt.apply(state, state.attack);
     const a = state.attack;
-    const which = ['defense'].includes(data.stage) ? 'defenseDice' : 'attackDice';
+    const which = ['defense', 'atkOnDefense'].includes(data.stage) ? 'defenseDice' : 'attackDice';
     emit(state, { type: which, dice: a[which].map(d => ({ ...d })), mod: choice });
   },
 };

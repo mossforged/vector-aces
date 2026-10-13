@@ -92,6 +92,18 @@ Head Wound (no pilot ability / elite upgrades).
 - ◐ Casso Andrel guesses at the start of the Activation phase (after both dials are locked) instead of the end of Planning.
 - Skipped: the two docking titles for the Skiff and Tern (they need a large carrier ship that isn't in the game).
 
+## Content batch: dominion (10 ships, 66 pilots, 70 upgrades, 5 conditions)
+- Ships: Specter, Maul, Vespid, Stiletto, Gadfly, Harrier, Scorpion, Starling, Nightjar, Reaver; new Dominion pilots for Wasp, Hornet, Talon, Beetle and Mantis.
+- ✅ All 42 pilot abilities and all Elite / System / Tech / Dominion crew / title / modification cards implemented; cost discounts (Hornet Mk. X) and slot removal (Mantis X7, Beetle Shuttle) work in the squad builder.
+- New rules step: the attacker may modify the defender's dice right after the defense roll (Feint, Marksman, Kesta Morne).
+- ◐ “Start of the game” choices (Old Grudge, Agent Kaldor, Director Kresh, Mine Planner, Wideband Scanner) happen at the start of the first Activation phase; Wideband Scanner gives each nearby wingmate 1 focus (no deployment skill change). Mine Planner lays mines 2 ranges ahead of the ship.
+- ◐ Target Jammer is used at the start of the Activation phase (not Planning). Fire Link doesn't spend its own lock.
+- ◐ Lieutenant Corvo's angled roll: a centre barrel roll shifted 20 mm forward or back. “Reverb” decloaks with 2-bank templates forward (side decloaks unchanged).
+- ◐ “Twinlock” keeps a spare lock after a lock action only. “Snapfire” and the shield-loss pilots react to shield loss from attacks.
+- ◐ Fire Solver and The Sovereign's named die: other effects that change specific faces can still apply afterwards. Marksman cancels an evade before the defender modifies (not at compare).
+- ◐ Tovar Brisk restores a discarded Elite card at the next check (after an attack, maneuver, action or the End phase). Signal Relay / Focus Optics cap the token at the next action or start of combat.
+- ◐ Gunboat Config / Arsenal Config: the extra slots work; firing while weapons are disabled is not implemented. Beetle Shuttle's 4-point crew limit isn't enforced. Light Frame's agility limit and Thrust Damper's hull limit are enforced.
+
 ## Not yet
 - ⬜ Missions (escort, asteroid run, satellites) — see WORKSTREAMS.md
 - ⬜ Team play (3–4 players)

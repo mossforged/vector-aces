@@ -15,7 +15,9 @@
 //   actWhileStressed, attackWhileTouching, alwaysHits, delayDestruction, keepFocus,
 //   lockCostAsFocus, forbidAttackRerolls (as defender: also blocks focus), faceupDrawThree (as attacker),
 //   discardOnlyOnHit, turretWeapon(upgradeId) (that secondary fires outside the arc), redWhileStressed,
-//   attackOnObstacle
+//   attackOnObstacle, stressedAction(actionId) (allowed while stressed), delayStress (red-maneuver stress after
+//   the action step), phaseRocks (repositions may overlap asteroids; no crits from asteroids), launchBombs
+//   decloakPositions(state, ship, options[]) VALUE hook
 // WEAPON effects are NOT hooks on the owner: they live under `weapon: {...}` and combat looks them
 //   up by the weapon being fired (see cards/weapons.js).
 // ATTACK hooks (called for EVERY ship on the table; check roles via a.attacker / a.defender):
@@ -32,12 +34,20 @@
 // EVENT hooks (own ship) returning steps[] to run next (may be empty):
 //   beforeReveal, onReveal(m) (may edit ship.round.maneuver), afterManeuver(color, {blocked, bumped}),
 //   afterAction(actionId),
-//   onSpendFocus, onSpendLock(targetId), onStress
+//   onSpendFocus, onSpendLock(targetId), onStress, afterDrop(ordnanceType)
 // onDealt(state, ship, cardId, faceup, cardDef) → 'discard' to throw the dealt Damage card away
 // PHASE hooks (every ship) returning steps[]:  startActivation, startCombat, endPhase
 // WATCH hooks (every ship; owner 2nd arg) returning steps[]:
 //   anyManeuver(ship, color, {bumped, hitObstacle})  after any ship's maneuver
 //   anyAction(ship, actionId)                         after any ship performs an action
+//   anySpendFocus(ship)                               after any ship spends a focus token
+//   combatActive(ship)                                when a ship becomes the active ship in the Combat phase
+// FOLD over every ship (owner 2nd arg):
+//   denyTokens(ship, ctx, a, v) → true blocks: 'attackFocus' | 'defenseFocus' | 'evadeToken' | 'action:<id>'
+//   blockMods(a, side, v) → true: that side ('attacker' | 'defender') can't modify its own dice this attack
+//   lockCostWaived(ship, target, weaponId, v) → true: that "Attack (lock)" weapon needs no lock
+// afterRollForced(state, owner, a, 'attack'|'defense') is called for EVERY ship right after each roll.
+// Stage 'atkOnDefense' (attacker modifies defense dice) runs between the defense roll and 'defense'.
 // ORDNANCE (every ship): bombDetonates(tok, victims, ok) → ok (false = it stays on the table this round)
 //   onDetonate(tok, victims)  side effects only, right before a bomb/mine resolves
 // WEAPON extras (cards/weapons.js): replaceDamage(state, a) — on a hit, run this instead of normal damage;

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-13 — dominion content batch
+- 10 ships (Specter, Maul, Vespid, Stiletto, Gadfly, Harrier, Scorpion, Starling, Nightjar, Reaver), 66 pilots, 70 upgrades (elite, system, tech, Dominion crew, titles/mods), 5 conditions; original art and 3 presets.
+- Engine: attacker-modifies-defense-dice stage (`atkOnDefense`); `afterRollForced` now called on every ship's cards; fold hooks `denyTokens`, `blockMods`, `lockCostWaived`; watch hooks `combatActive`, `anySpendFocus`; flags `stressedAction`, `delayStress`, `phaseRocks`, `launchBombs`; `decloakPositions` and `afterDrop`; weapon `noAttackMods`. Upgrade data: `removes`, `discount`, `maxHull`, `maxAgility` (`entryPoints()` prices a ship with discounts).
+- Card simulation gives every card the random games missed a game of its own, so the "every card drafted" check stays reliable as content grows.
+
 ## 2026-10-13 — league content batch
 - 7 ships (Pavise, Saber, Skiff, Longbow, Ironwood, Hammerhead, Tern), 47 pilots, 68 upgrades (drones, torpedoes, missiles, cannons, turrets, League crew, titles/mods), 2 conditions; original art and 3 presets.
 - Engine additions shared by all batches: upgrades can grant slots (`grants`, `minSkill`, `noSlot`; `slotsFor()` used by validation, builder and random squads); off-dial maneuvers; new hooks `startActivation`, `anyManeuver`, `anyAction`, `boostTemplates`, `lockTargets`, `turretWeapon`, `redWhileStressed`, `attackOnObstacle`, `bombDetonates`, `onDetonate`; weapon `replaceDamage` / `onlyFocusMods`; `round.noTokenMods`. "Attack (focus)" now only spends the focus when the card says so.

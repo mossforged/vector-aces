@@ -59,7 +59,7 @@ export function botAction(state, player, rng = Math.random) {
   const pref = ['focus', 'lock', 'lock:blank', 'dfocus', 'devade', 'kestrel', 'deadeye', 'torpedo'];
   let pick = opts.find(o => pref.includes(o.id) && rand(rng) < 0.8);
   if (!pick && p.kind === 'declareAttack') pick = opts.find(o => o.id !== 'hold');
-  if (!pick && (p.kind === 'modAttack' || p.kind === 'modDefense')) pick = opts.find(o => o.id !== 'done') || opts[0];
+  if (!pick && ['modAttack', 'modDefense', 'modDefenseAtk', 'modAttackDef'].includes(p.kind)) pick = opts.find(o => o.id !== 'done') || opts[0];
   if (!pick) pick = opts[Math.floor(rand(rng) * opts.length)];
   return { type: 'CHOOSE', player, choice: pick.id };
 }
@@ -82,6 +82,7 @@ export async function randomSquad(faction, rng = Math.random, limit = 100) {
         const opts = Object.values(UPGRADES).filter(u => u.slot === free[k] && upgradeAllowed(p.id, u.id, e.upgrades));
         if (!opts.length) continue;
         const u = pickOne(opts);
+        if (u.removes) e.upgrades = e.upgrades.filter(x => !u.removes.includes(UPGRADES[x].slot)); // e.g. a title that strips slots
         e.upgrades.push(u.id);
         free.push(...(u.grants || [])); // slots granted by this upgrade get filled too
       }

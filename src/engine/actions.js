@@ -7,7 +7,7 @@ import { barrelRollPoses, buildPath } from './maneuvers.js';
 import { basePolygon, polygonInsideBoard, polygonsIntersect } from './geometry.js';
 import { rollFace } from './dice.js';
 import { flipFacedown } from './damage.js';
-import { cardActions, fold, ownSteps, everyone } from './hooks.js';
+import { cardActions, fold, ownSteps, everyone, foldAll } from './hooks.js';
 import { addStress, acquireLock, jammed, freeAction } from './effects.js';
 import { checkMines } from './ordnance.js';
 import { dialFor } from '../data/ships.js';
@@ -36,7 +36,7 @@ function lockTargets(state, ship) {
 }
 
 function clearOf(state, ship, poly, template = null) {
-  const obs = obstaclePolys(state);
+  const obs = hasFlag(state, ship, 'phaseRocks') ? [] : obstaclePolys(state);
   return polygonInsideBoard(poly) && !overlapsAnyShip(state, poly, ship.id)
     && !obs.some(o => polygonsIntersect(poly, o) || (template && polygonsIntersect(template, o)));
 }
@@ -65,7 +65,8 @@ export function boostPositions(state, ship) {
 
 /** All actions this ship could take right now (excluding pass). `grant` adds actions not on the bar. */
 export function availableActions(state, ship, { only = null, grant = [] } = {}) {
-  if (ship.stress > 0 && !hasFlag(state, ship, 'actWhileStressed')) return [];
+  // Stressed ships can't act, unless a card allows all actions or some of them (stressedAction(id)).
+  const stressedOnly = ship.stress > 0 && !hasFlag(state, ship, 'actWhileStressed');
   const used = ship.round.actionsUsed;
   let list = [];
   if (!hasFaceup(ship, 'sensor_burnout')) {
@@ -75,6 +76,8 @@ export function availableActions(state, ship, { only = null, grant = [] } = {}) 
   for (const c of faceupCards(ship)) if (DAMAGE_CARDS[c.card].repair) list.push({ id: `repair:${c.card}`, label: `Repair: ${DAMAGE_CARDS[c.card].name}` });
   list = list.filter((a, i) => list.findIndex(b => b.id === a.id) === i && !used.includes(a.id));
   if (only) list = list.filter(a => only.includes(a.id));
+  if (stressedOnly) list = list.filter(a => hasFlag(state, ship, 'stressedAction', a.id));
+  list = list.filter(a => !foldAll(state, 'denyTokens', false, ship, `action:${a.id}`, null));
   return list.filter(a => {
     if (a.id === 'lock') return lockTargets(state, ship).length > 0;
     if (a.id === 'roll') return rollPositions(state, ship).length > 0;

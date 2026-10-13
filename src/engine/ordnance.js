@@ -10,7 +10,7 @@ import { rollDice } from './dice.js';
 import { sufferDamage, dealDamageCard } from './damage.js';
 import { addStress } from './effects.js';
 import { liveShips, shipName, shipPoly } from './queries.js';
-import { everyone, foldAll } from './hooks.js';
+import { everyone, foldAll, flag, ownSteps } from './hooks.js';
 
 /** Outline polygon(s) of a token. */
 export function ordnancePolys(tok) {
@@ -31,7 +31,9 @@ const depth = def => (def.shape.type === 'circle' ? def.shape.r * 2 : def.shape.
 export function dropOrdnance(state, ship, type) {
   const def = ORDNANCE[type];
   const half = CONFIG.baseSize.small / 2;
-  const back = mul(fwd(ship.pose.h), -(half + CONFIG.straightPerSpeed + depth(def) / 2));
+  // Timed bombs can be launched ahead along a 5-straight template by some cards; mines are always dropped.
+  const launch = def.kind === 'bomb' && flag(state, ship, 'launchBombs');
+  const back = launch ? mul(fwd(ship.pose.h), half + 5 * CONFIG.straightPerSpeed + depth(def) / 2) : mul(fwd(ship.pose.h), -(half + CONFIG.straightPerSpeed + depth(def) / 2));
   const centre = add(ship.pose, back);
   const n = def.cluster || 1, gap = (def.shape.w || def.shape.r * 2) + 4;
   for (let i = 0; i < n; i++) {
@@ -40,7 +42,8 @@ export function dropOrdnance(state, ship, type) {
     state.ordnance.push({ id: `b${state.uid++}`, type, x: p.x, y: p.y, h: ship.pose.h, owner: ship.owner, round: state.round, by: ship.id });
   }
   emit(state, { type: 'drop', ship: ship.id, ordnance: type });
-  log(state, `${shipName(ship)} drops ${n > 1 ? `${n} × ${def.name}` : `a ${def.name}`}.`);
+  log(state, `${shipName(ship)} ${launch ? 'launches' : 'drops'} ${n > 1 ? `${n} × ${def.name}` : `a ${def.name}`}.`);
+  push(state, ...ownSteps(state, ship, 'afterDrop', type));
 }
 
 const removeToken = (state, tok) => { state.ordnance = state.ordnance.filter(t => t.id !== tok.id); };

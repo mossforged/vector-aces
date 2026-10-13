@@ -28,7 +28,34 @@ export async function runCardSim(games = 600, { quiet = false } = {}) {
     if (s.winner) finished++;
     rounds += s.round;
   }
+  // Coverage pass: every card the random games missed gets a game of its own (built around it).
   const all = [...Object.keys(PILOTS), ...Object.keys(UPGRADES)];
+  const { upgradeAllowed, validateSquad } = await import('../src/engine/index.js');
+  for (const [k, id] of all.filter(x => !seen.has(x)).entries()) {
+    const rng = mulberry(77000 + k);
+    let host = PILOTS[id] ? { pilot: id, upgrades: [] } : null;
+    if (!host) {
+      for (const p of Object.values(PILOTS)) {
+        const pre = Object.values(UPGRADES).filter(u => u.grants && upgradeAllowed(p.id, u.id) && (u.grants.includes(UPGRADES[id].slot)));
+        for (const extra of [[], ...pre.map(u => [u.id])]) {
+          if (upgradeAllowed(p.id, id, extra) && !validateSquad(p.faction, [{ pilot: p.id, upgrades: [...extra, id] }]).length) { host = { pilot: p.id, upgrades: [...extra, id] }; break; }
+        }
+        if (host) break;
+      }
+    }
+    if (!host) continue;
+    const f1 = PILOTS[host.pilot].faction;
+    const seats = [{ faction: f1, squad: [host, ...(await randomSquad(f1, rng, 60))].slice(0, 4) }, { faction: f1, squad: await randomSquad(f1, rng) }];
+    if (validateSquad(f1, seats[0].squad).length) seats[0].squad = [host];
+    for (const e of seats[0].squad) { seen.add(e.pilot); e.upgrades.forEach(u => seen.add(u)); }
+    let s = newGame({ seed: 5000 + k, seats, obstacles: true });
+    for (let i = 0; i < 6000 && !s.winner && s.round <= 30; i++) {
+      const p = waitingOn(s)[0];
+      const r = applyAction(s, botAction(s, p, rng));
+      if (r.error) throw new Error(`coverage game for ${id}: ${r.error}`);
+      s = r.state;
+    }
+  }
   const never = all.filter(id => !seen.has(id));
   if (!quiet) {
     console.log(`    ${finished}/${games} finished, avg ${(rounds / games).toFixed(1)} rounds`);

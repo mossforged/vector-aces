@@ -11,7 +11,7 @@ import { basePolygon, polygonInsideBoard, polygonsIntersect, closestPoints } fro
 import { rollFace } from './dice.js';
 import { sufferDamage, destroyShip } from './damage.js';
 import { freshRound } from './setup.js';
-import { ownSteps, everyone, flag } from './hooks.js';
+import { ownSteps, everyone, flag, fold } from './hooks.js';
 import { addStress } from './effects.js';
 import {
   liveShips, shipName, chassis, enemyOf, effectiveSkill, maneuverColor, hasFaceup, obstaclePolys, shipPoly, shipList,
@@ -21,11 +21,12 @@ import {
 /** Where a cloaked ship may decloak: barrel roll with the 2-straight template, or 2 straight ahead. */
 export function decloakPositions(state, ship) {
   const size = chassis(ship).size;
-  const clear = poly => polygonInsideBoard(poly) && !overlapsAnyShip(state, poly, ship.id) && !obstaclePolys(state).some(o => polygonsIntersect(poly, o));
+  const rocks = flag(state, ship, 'phaseRocks') ? [] : obstaclePolys(state);
+  const clear = poly => polygonInsideBoard(poly) && !overlapsAnyShip(state, poly, ship.id) && !rocks.some(o => polygonsIntersect(poly, o));
   const out = barrelRollPoses(ship.pose, size, 2).map(r => ({ id: r.id, label: `Roll ${r.side} · ${r.label}`, pose: r.pose }));
   const ahead = buildPath(ship.pose, { speed: 2, bearing: 'S' }, size);
   out.push({ id: 'ahead', label: 'Straight ahead (2)', pose: ahead.final, template: ahead.templatePoly });
-  return out.filter(o => clear(basePolygon(o.pose, size)) && !(o.template && obstaclePolys(state).some(p => polygonsIntersect(o.template, p))));
+  return fold(state, ship, 'decloakPositions', out).filter(o => clear(basePolygon(o.pose, size)) && !(o.template && rocks.some(p => polygonsIntersect(o.template, p))));
 }
 
 /** Ships in pilot-skill order; ties: initiative player first, then squad order. */
@@ -178,7 +179,9 @@ export const steps = {
     if (s.ion) { ship.ion = 0; }
     checkMines(state, ship, tpl ? [tpl] : []);
     if (ship.destroyed) return;
-    if (color === 'r') addStress(state, ship);
+    // Pattern-analyser style cards take the red-maneuver stress after the action step instead.
+    const lateStress = color === 'r' && flag(state, ship, 'delayStress');
+    if (color === 'r' && !lateStress) addStress(state, ship);
     if (color === 'g' && ship.stress > 0) ship.stress--;
     if (bumped.length || hitObstacle) ship.round.skipAction = true;
 
@@ -188,7 +191,7 @@ export const steps = {
     if (color === 'r' && hasFaceup(ship, 'hull_breach')) after.push({ t: 'rollForDamage', ship: ship.id, why: 'Hull Breach' });
     after.push(...ownSteps(state, ship, 'afterManeuver', color, { blocked: ship.round.skipAction, bumped: bumped.length > 0 }));
     after.push(...everyone(state, 'anyManeuver', ship, color, { bumped: bumped.length > 0, hitObstacle }));
-    push(state, ...after, ...(s.slam ? [] : [{ t: 'actionStep', ship: ship.id }]));
+    push(state, ...after, ...(s.slam ? [] : [{ t: 'actionStep', ship: ship.id }]), ...(lateStress ? [{ t: 'stressStep', ship: ship.id }] : []));
   },
 
   obstacleHit(state, s) {
@@ -197,7 +200,7 @@ export const steps = {
     emit(state, { type: 'roll', ship: ship.id, faces: [f], reason: 'Asteroid impact' });
     log(state, `${shipName(ship)} hits an asteroid and rolls ${f}.`);
     if (f === 'hit') sufferDamage(state, ship, 1, 0);
-    if (f === 'crit') sufferDamage(state, ship, 0, 1);
+    if (f === 'crit' && !flag(state, ship, 'phaseRocks')) sufferDamage(state, ship, 0, 1);
   },
   simpleDamage(state, s) {
     const ship = state.ships[s.ship];

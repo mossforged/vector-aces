@@ -68,7 +68,7 @@ export function waitingOn(state) {
   return [state.prompt.player];
 }
 
-export { squadPoints, validateSquad, upgradeAllowed, slotsFor, deployZone, ENGINE_VERSION } from './setup.js';
+export { squadPoints, entryPoints, validateSquad, upgradeAllowed, slotsFor, deployZone, ENGINE_VERSION } from './setup.js';
 export { needsDial } from './activation.js';
 export { availableActions } from './actions.js';
 export { attackOptions } from './combat.js';
