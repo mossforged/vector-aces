@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Vector Aces 3D Test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Semi+Condensed:wght@400;600;700&display=swap">
+<style>
+/* Layout: full-bleed WebGL play mat; one slim control strip docked bottom-left, like a cockpit readout */
+:root {
+  --bg: #05070b;
+  --panel: rgba(12, 16, 24, 0.84);
+  --line: #273041;
+  --fg: #dfe4ec;
+  --muted: #8b95a8;
+  --accent: #f2a03d;
+  --display: 'Saira Semi Condensed', 'Arial Narrow', system-ui, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--display); }
+#stage { position: fixed; inset: 0; }
+#stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.hud {
+  position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
+  width: fit-content; max-width: calc(100% - 32px); box-sizing: border-box;
+  padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  backdrop-filter: blur(6px);
+}
+.hud h1 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.hud h1 span { color: var(--accent); }
+.group { display: flex; gap: 4px; flex-wrap: wrap; }
+.group button {
+  font: 600 13px/1 var(--display); letter-spacing: 0.04em; color: var(--muted);
+  background: transparent; border: 1px solid var(--line); border-radius: 4px; padding: 7px 10px; cursor: pointer;
+}
+.group button:hover { color: var(--fg); border-color: var(--muted); }
+.group button[aria-pressed="true"] { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+.group button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.stats { font: 12px/1.3 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.stats b { color: var(--fg); font-weight: 600; }
+#status {
+  position: fixed; top: calc(16px + env(safe-area-inset-top, 0px)); left: 16px; right: 16px;
+  font: 600 13px var(--display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted);
+}
+.legend { position: fixed; top: calc(16px + env(safe-area-inset-top, 0px)); right: 16px; display: grid; gap: 4px;
+  font: 600 12px var(--display); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); text-align: right; }
+.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-left: 6px; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<p id="status">Loading ships…</p>
+<div class="legend" aria-label="Factions">
+  <span>League · Lancer<i style="background:#e0533d"></i></span>
+  <span>Dominion · Wasp<i style="background:#4fbf6b"></i></span>
+  <span>Syndicate · Raptor<i style="background:#b36be6"></i></span>
+</div>
+<div class="hud">
+  <h1>Vector Aces <span>3D test</span></h1>
+  <div class="group" role="group" aria-label="Camera">
+    <button id="v-table" aria-pressed="true">Table</button>
+    <button id="v-close" aria-pressed="false">Close-up</button>
+    <button id="v-top" aria-pressed="false">Top-down</button>
+  </div>
+  <div class="group" role="group" aria-label="Effects">
+    <button id="t-fx" aria-pressed="true">Lasers</button>
+    <button id="t-bloom" aria-pressed="true">Glow</button>
+  </div>
+  <div class="stats" id="stats">— fps</div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const $ = id => document.getElementById(id);
+const status = $('status');
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---------- renderer, lights, environment (units: mm; table is 914 mm = 3 ft square)
+const stage = $('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.AgXToneMapping;
+renderer.toneMappingExposure = 1.15;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.info.autoReset = false;
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x04060a);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.55;
+
+const key = new THREE.DirectionalLight(0xfff0dc, 2.6);
+key.position.set(320, 620, 260);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -480, right: 480, top: 480, bottom: -480, near: 100, far: 1500 });
+key.shadow.bias = -0.0004;
+scene.add(key);
+const rim = new THREE.DirectionalLight(0x5b8cff, 1.1);
+rim.position.set(-420, 260, -380);
+scene.add(rim);
+scene.add(new THREE.HemisphereLight(0x8fa8ff, 0x1a1410, 0.35));
+
+const camera = new THREE.PerspectiveCamera(38, 1, 5, 6000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.minDistance = 40;
+controls.maxDistance = 2200;
+
+// ---------- play mat: generated starfield with faint nebula and range grid
+function seeded(seed) { return () => (seed = (seed * 16807) % 2147483647) / 2147483647; }
+function matTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 2048;
+  const g = c.getContext('2d'), r = seeded(7);
+  g.fillStyle = '#03050a'; g.fillRect(0, 0, 2048, 2048);
+  for (const [x, y, rad, col] of [[520, 640, 900, 'rgba(90,40,140,0.22)'], [1500, 1400, 1000, 'rgba(20,90,120,0.20)'], [1300, 400, 600, 'rgba(140,60,40,0.12)']]) {
+    const gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 2048, 2048);
+  }
+  for (let i = 0; i < 3000; i++) {
+    const s = r() < 0.97 ? r() * 1.1 + 0.3 : r() * 2.0 + 1.0;
+    g.fillStyle = `rgba(${150 + r() * 50},${160 + r() * 45},${200 + r() * 30},${0.25 + r() * 0.45})`;
+    g.beginPath(); g.arc(r() * 2048, r() * 2048, s, 0, Math.PI * 2); g.fill();
+  }
+  g.strokeStyle = 'rgba(140,170,220,0.06)'; g.lineWidth = 2;   // 100 mm range grid
+  for (let i = 1; i < 9; i++) { const p = i * 2048 / 9.14; g.beginPath(); g.moveTo(p, 0); g.lineTo(p, 2048); g.moveTo(0, p); g.lineTo(2048, p); g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+}
+const mat = new THREE.Mesh(new THREE.PlaneGeometry(914, 914), new THREE.MeshStandardMaterial({ map: matTexture(), roughness: 0.95, metalness: 0, envMapIntensity: 0.08, color: 0x6a6f7a }));
+mat.rotation.x = -Math.PI / 2; mat.receiveShadow = true; scene.add(mat);
+const frameMat = new THREE.MeshStandardMaterial({ color: 0x151a22, roughness: 0.6, metalness: 0.3 });
+for (const [w, d, x, z] of [[934, 10, 0, -462], [934, 10, 0, 462], [10, 914, -462, 0], [10, 914, 462, 0]]) {
+  const b = new THREE.Mesh(new THREE.BoxGeometry(w, 8, d), frameMat); b.position.set(x, 4, z); b.receiveShadow = true; scene.add(b);
+}
+
+// ---------- bases: 40 mm square with the firing arc printed in faction colour
+const FACTION = { league: '#e0533d', dominion: '#4fbf6b', syndicate: '#b36be6' };
+const BOLT = { league: 0xff5a2a, dominion: 0x3dff7a, syndicate: 0xff3ad0 };
+function baseTexture(color) {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = '#0b0d11'; g.fillRect(0, 0, 256, 256);
+  g.strokeStyle = color; g.lineWidth = 10; g.strokeRect(5, 5, 246, 246);
+  g.lineWidth = 6; g.beginPath(); g.moveTo(128, 128); g.lineTo(10, 10); g.moveTo(128, 128); g.lineTo(246, 10); g.stroke();
+  g.fillStyle = color; g.globalAlpha = 0.14; g.beginPath(); g.moveTo(128, 128); g.lineTo(10, 10); g.lineTo(246, 10); g.fill();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const baseTex = Object.fromEntries(Object.entries(FACTION).map(([k, v]) => [k, baseTexture(v)]));
+const pegMat = new THREE.MeshPhysicalMaterial({ color: 0xbfd8ff, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.28 });
+const PEG = 26;
+function makeBase(faction) {
+  const g = new THREE.Group();
+  const top = new THREE.MeshStandardMaterial({ map: baseTex[faction], roughness: 0.45 });
+  const side = new THREE.MeshStandardMaterial({ color: 0x0b0d11, roughness: 0.5 });
+  const box = new THREE.Mesh(new THREE.BoxGeometry(40, 3, 40), [side, side, top, side, side, side]);
+  box.position.y = 1.5; box.castShadow = box.receiveShadow = true; g.add(box);
+  const peg = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2.2, PEG, 12), pegMat); peg.position.y = 3 + PEG / 2; g.add(peg);
+  return g;
+}
+
+// ---------- load models
+const loader = new GLTFLoader();
+const load = name => new Promise((res, rej) => loader.load(`models/${name}.glb`, g => res(g.scene), undefined, rej));
+const glowMats = [];
+function prep(root) {
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    o.castShadow = true; o.receiveShadow = true;
+    for (const m of [].concat(o.material)) {
+      if (m.name === 'glow' && !glowMats.includes(m)) { m.emissiveIntensity = 3.2; glowMats.push(m); }
+      if (m.name === 'glass') { m.envMapIntensity = 1.6; }
+      if (m.name.startsWith('rock')) { m.envMapIntensity = 0.25; m.flatShading = true; m.needsUpdate = true; }
+    }
+  });
+  return root;
+}
+
+const ships = [];
+const rocks = [];
+// table layout: League at the near edge flying away from the camera, Dominion at the far edge
+const LAYOUT = [
+  ['lancer', 'league', -95, 175, Math.PI + 0.15], ['lancer', 'league', 45, 225, Math.PI - 0.12],
+  ['wasp', 'dominion', -40, -160, 0.2], ['wasp', 'dominion', 95, -120, -0.3], ['wasp', 'dominion', -175, -95, 0.55],
+  ['raptor', 'syndicate', 245, 40, -Math.PI / 2 - 0.35],
+];
+const ROCKS = [[-235, 55, 1.0, 0.4], [140, -5, 0.75, 2.1], [10, -345, 1.15, 4.0], [-330, -300, 0.6, 1.0]];
+
+async function build() {
+  const [lancer, wasp, raptor, asteroid] = await Promise.all(['lancer', 'wasp', 'raptor', 'asteroid'].map(load));
+  const models = { lancer: prep(lancer), wasp: prep(wasp), raptor: prep(raptor) };
+  prep(asteroid);
+  LAYOUT.forEach(([kind, faction, x, z, rot], i) => {
+    const g = new THREE.Group();
+    g.add(makeBase(faction));
+    const ship = models[kind].clone();
+    ship.position.y = 3 + PEG + 4;
+    g.add(ship);
+    g.position.set(x, 0, z); g.rotation.y = rot;
+    scene.add(g);
+    ships.push({ g, ship, kind, faction, phase: i * 1.7 });
+  });
+  for (const [x, z, s, r] of ROCKS) {
+    const a = asteroid.clone(); a.scale.setScalar(s); a.position.set(x, 22 * s, z); a.rotation.set(r, r * 1.7, r * 0.6);
+    scene.add(a); rocks.push({ a, spin: 0.04 + 0.03 * s });
+  }
+  status.hidden = true;
+}
+
+// ---------- effects: laser bolts, hit flashes, shield ripples
+const fx = [];
+const flashTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(255,220,160,0.9)'); gr.addColorStop(1, 'rgba(255,120,40,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(c);
+})();
+const boltGeo = new THREE.CylinderGeometry(0.55, 0.55, 14, 6).rotateX(Math.PI / 2);
+function shipPoint(s) { return s.g.position.clone().add(new THREE.Vector3(0, 3 + PEG + 6, 0)); }
+function fire(a, b) {
+  const from = shipPoint(a).add(new THREE.Vector3(0, 0, 18).applyAxisAngle(new THREE.Vector3(0, 1, 0), a.g.rotation.y));
+  const to = shipPoint(b);
+  const color = BOLT[a.faction];
+  for (const side of [-1, 1]) {
+    const m = new THREE.Mesh(boltGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(4), toneMapped: false }));
+    const off = new THREE.Vector3(side * 9, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), a.g.rotation.y);
+    const start = from.clone().add(off);
+    m.position.copy(start); m.lookAt(to); scene.add(m);
+    fx.push({ obj: m, t: 0, life: 0.32 + side * 0.04, start, end: to.clone(), kind: 'bolt', delay: side > 0 ? 0.08 : 0 });
+  }
+  setTimeout(() => hit(b, color), 400);
+}
+function hit(b, color) {
+  const p = shipPoint(b);
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: flashTex, color: new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.5), blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+  spr.position.copy(p); spr.scale.setScalar(6); scene.add(spr);
+  fx.push({ obj: spr, t: 0, life: 0.45, kind: 'flash' });
+  const shield = new THREE.Mesh(new THREE.SphereGeometry(22, 32, 16), new THREE.MeshBasicMaterial({ color: 0x66b8ff, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  shield.position.copy(p); shield.scale.set(1, 0.55, 1); scene.add(shield);
+  fx.push({ obj: shield, t: 0, life: 0.6, kind: 'shield' });
+  hitLight.color.set(color); hitLight.position.copy(p);
+  fx.push({ obj: hitLight, t: 0, life: 0.3, kind: 'light', keep: true });
+}
+// one reusable light for hit flashes (adding lights at runtime would stall to recompile shaders)
+const hitLight = new THREE.PointLight(0xffffff, 0, 120, 2); scene.add(hitLight);
+const VOLLEYS = [[0, 2], [3, 1], [5, 3], [1, 2], [2, 0], [4, 0]];
+let volley = 0, nextShot = 1.2;
+
+// ---------- post-processing: bloom on bright engine glow and bolts only
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.45, 0.96);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+// ---------- camera views
+const VIEWS = {
+  table: { pos: [0, 560, 690], target: [0, 0, 20] },
+  top: { pos: [0, 1420, 40], target: [0, 0, 0] },
+  close: () => { const s = ships[0].g.position; return { pos: [s.x + 70, 62, s.z + 78], target: [s.x, 30, s.z] }; },
+};
+let tween = null;
+function setView(name) {
+  const v = typeof VIEWS[name] === 'function' ? VIEWS[name]() : VIEWS[name];
+  tween = { t: 0, fromP: camera.position.clone(), fromT: controls.target.clone(), toP: new THREE.Vector3(...v.pos), toT: new THREE.Vector3(...v.target) };
+  for (const id of ['v-table', 'v-close', 'v-top']) $(id).setAttribute('aria-pressed', String(id === 'v-' + name));
+}
+camera.position.set(...VIEWS.table.pos); controls.target.set(...VIEWS.table.target);
+$('v-table').onclick = () => setView('table');
+$('v-close').onclick = () => setView('close');
+$('v-top').onclick = () => setView('top');
+let fxOn = !reduceMotion, bloomOn = true;
+$('t-fx').setAttribute('aria-pressed', String(fxOn));
+$('t-fx').onclick = () => { fxOn = !fxOn; $('t-fx').setAttribute('aria-pressed', String(fxOn)); };
+$('t-bloom').onclick = () => { bloomOn = !bloomOn; $('t-bloom').setAttribute('aria-pressed', String(bloomOn)); };
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false); composer.setSize(w, h);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+
+// ---------- loop
+const clock = new THREE.Clock();
+let frames = 0, acc = 0, fps = 0;
+function tick() {
+  const dt = Math.min(clock.getDelta(), 0.1), t = clock.elapsedTime;
+  if (tween) {
+    tween.t = Math.min(1, tween.t + dt / 0.9);
+    const e = 1 - Math.pow(1 - tween.t, 3);
+    camera.position.lerpVectors(tween.fromP, tween.toP, e); controls.target.lerpVectors(tween.fromT, tween.toT, e);
+    if (tween.t === 1) tween = null;
+  }
+  controls.update();
+  for (const s of ships) {
+    s.ship.position.y = 3 + PEG + 4 + (fxOn ? Math.sin(t * 1.3 + s.phase) * 0.9 : 0);
+    s.ship.rotation.z = fxOn ? Math.sin(t * 0.9 + s.phase) * 0.04 : 0;
+  }
+  for (const r of rocks) r.a.rotation.y += r.spin * dt;
+  for (const m of glowMats) m.emissiveIntensity = 3.2 + (fxOn ? Math.sin(t * 9) * 0.35 + Math.sin(t * 23) * 0.2 : 0);
+  if (fxOn && ships.length && t > nextShot) {
+    const [a, b] = VOLLEYS[volley++ % VOLLEYS.length]; fire(ships[a], ships[b]); nextShot = t + 1.6;
+  }
+  for (let i = fx.length - 1; i >= 0; i--) {
+    const f = fx[i];
+    if (f.delay > 0) { f.delay -= dt; f.obj.visible = false; continue; }
+    f.obj.visible = true; f.t += dt; const k = f.t / f.life;
+    if (f.kind === 'bolt') f.obj.position.lerpVectors(f.start, f.end, Math.min(1, k));
+    if (f.kind === 'flash') { f.obj.scale.setScalar(6 + 30 * k); f.obj.material.opacity = 1 - k; }
+    if (f.kind === 'shield') { f.obj.material.opacity = 0.18 * (1 - k); f.obj.scale.set(1 + 0.15 * k, 0.55 + 0.1 * k, 1 + 0.15 * k); }
+    if (f.kind === 'light') f.obj.intensity = 4000 * (1 - k);
+    if (k >= 1 && f.keep) { f.obj.intensity = 0; fx.splice(i, 1); continue; }
+    if (k >= 1) { scene.remove(f.obj); f.obj.geometry?.dispose?.(); f.obj.material?.dispose?.(); fx.splice(i, 1); }
+  }
+  renderer.info.reset();
+  if (bloomOn) composer.render(); else renderer.render(scene, camera);
+  frames++; acc += dt;
+  if (acc > 0.5) {
+    fps = Math.round(frames / acc); frames = 0; acc = 0;
+    const tri = renderer.info.render.triangles, calls = renderer.info.render.calls;
+    $('stats').innerHTML = `<b>${fps}</b> fps · <b>${(tri / 1000).toFixed(0)}k</b> triangles · <b>${calls}</b> draw calls`;
+  }
+  requestAnimationFrame(tick);
+}
+
+build().then(tick).catch(err => { status.textContent = 'Could not load the ship models: ' + err.message; console.error(err); });
+</script>
+</body>
+</html>
