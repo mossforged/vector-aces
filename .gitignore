@@ -3,3 +3,4 @@ node_modules/
 .DS_Store
 tools/models/previews/*.png
 lab/3d/artifact.html
+__pycache__/
