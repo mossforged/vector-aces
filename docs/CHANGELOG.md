@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-13 — v0.6 every first-edition small ship
+- All three content batches are in: 24 new ships (36 in total), 168 new pilots, 209 new upgrades and 9 condition cards across the League, Dominion and Syndicate (details below).
+- Shared engine work for them: slot-granting / slot-removing / discounting upgrades, an attacker-modifies-defense-dice step, many new card hooks (see `engine/hooks.js`), on-destroyed effects, hull bonuses.
+
 ## 2026-10-13 — syndicate content batch
 - 7 ships (Adder, Gnat, Raptor, Bloodhound, Warden, Hopper, Gharial), 55 pilots (incl. Hammerhead pilots), 71 upgrades (crew, illicit, salvaged drones, modifications, Syndicate titles), 2 conditions; original art and 4 presets.
 - Engine: hull bonuses (`stat` 'hull'), `onDestroyed` / `anyDestroyed` / `anyDamaged` / `anyActivate` / `onLocked` / `afterDecloak` hooks, `takeFaceup` / `dealFaceup`, `ignoreBomb`, `bombRoll`, `longDrop`, front bomb drops, `deploySkill`. Upgrade data: `grantsOneOf`, `discount: { slot: '*' }`, `shieldValue`, `needsAction`, `needsSlots`, `requiresUpgrade`.

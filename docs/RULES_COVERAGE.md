@@ -75,7 +75,7 @@ Head Wound (no pilot ability / elite upgrades).
   cannons, turrets, crew, systems, modifications, one title — all implemented.
 - ◐ Simplified card choices: Commander Ostrava auto-deals the worst of 3 cards; Baron Kessick and
   Loyal Mechanic trigger automatically (always beneficial); Snap Roll removes the first enemy lock.
-- ⬜ Not yet: remaining small-ship batches (see below), large/huge ships, two-lock crew.
+- ✅ Every first-edition small ship is in (batches below). ⬜ Not yet: large/huge ships, true two-lock crew.
 
 ## Content batch: league (7 ships, 47 pilots, 68 upgrades, 2 conditions)
 - Ships: Pavise, Saber, Skiff, Longbow, Ironwood, Hammerhead (chassis shared with the Syndicate), Tern; new League pilots for Lancer, Dart, Halberd and the Wasp.
