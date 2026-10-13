@@ -7,7 +7,7 @@ import { barrelRollPoses, buildPath } from './maneuvers.js';
 import { basePolygon, polygonInsideBoard, polygonsIntersect } from './geometry.js';
 import { rollFace } from './dice.js';
 import { flipFacedown } from './damage.js';
-import { cardActions, fold, ownSteps } from './hooks.js';
+import { cardActions, fold, ownSteps, everyone } from './hooks.js';
 import { addStress, acquireLock, jammed, freeAction } from './effects.js';
 import { checkMines } from './ordnance.js';
 import { dialFor } from '../data/ships.js';
@@ -32,7 +32,7 @@ function slamOptions(state, ship) {
 }
 
 function lockTargets(state, ship) {
-  return liveShips(state).filter(o => o.owner !== ship.owner && rangeBetween(ship, o).band);
+  return fold(state, ship, 'lockTargets', liveShips(state).filter(o => o.owner !== ship.owner && rangeBetween(ship, o).band));
 }
 
 function clearOf(state, ship, poly, template = null) {
@@ -56,7 +56,8 @@ export function tractorPositions(state, ship) {
 
 export function boostPositions(state, ship) {
   const size = chassis(ship).size;
-  return [['BL', 'Bank left'], ['S', 'Straight'], ['BR', 'Bank right']].map(([b, label]) => {
+  const templates = fold(state, ship, 'boostTemplates', [['BL', 'Bank left'], ['S', 'Straight'], ['BR', 'Bank right']]);
+  return templates.map(([b, label]) => {
     const path = buildPath(ship.pose, { speed: 1, bearing: b }, size);
     return clearOf(state, ship, basePolygon(path.final, size), path.templatePoly) ? { id: b, label, pose: path.final, path } : null;
   }).filter(Boolean);
@@ -181,7 +182,7 @@ export const steps = {
   afterAction(state, s) {
     const ship = state.ships[s.ship];
     if (ship.destroyed) return;
-    push(state, ...ownSteps(state, ship, 'afterAction', s.action));
+    push(state, ...ownSteps(state, ship, 'afterAction', s.action), ...everyone(state, 'anyAction', ship, s.action));
   },
   lockPrompt(state, s) {
     const ship = state.ships[s.ship ?? s.choice];

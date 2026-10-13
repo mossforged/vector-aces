@@ -75,7 +75,22 @@ Head Wound (no pilot ability / elite upgrades).
   cannons, turrets, crew, systems, modifications, one title — all implemented.
 - ◐ Simplified card choices: Commander Ostrava auto-deals the worst of 3 cards; Baron Kessick and
   Loyal Mechanic trigger automatically (always beneficial); Snap Roll removes the first enemy lock.
-- ⬜ Not yet: remaining small ships (three batches, see WORKSTREAMS.md → A), large/huge ships, two-lock crew, dial-peeking crew.
+- ⬜ Not yet: remaining small-ship batches (see below), large/huge ships, two-lock crew.
+
+## Content batch: league (7 ships, 47 pilots, 68 upgrades, 2 conditions)
+- Ships: Pavise, Saber, Skiff, Longbow, Ironwood, Hammerhead (chassis shared with the Syndicate), Tern; new League pilots for Lancer, Dart, Halberd and the Wasp.
+- ✅ All 40 pilot abilities and all upgrades implemented, including slot-granting cards (Mentor Drone, Test Rig, Crew Pod, Bomb Rack, Painted Wasp, Sabra Wenn crew, Field Refit) and the two-sided Servo Wings.
+- ◐ Captain Rhone automatically holds back a friendly bomb whose blast would hit only friendly ships (once per round).
+- ◐ Sabra Wenn (crew) automatically picks the most damaged enemy in the blast.
+- ◐ Integrated Drone triggers automatically on the first Damage card while a drone is fitted.
+- ◐ “Redcap” and Pip Calloway: shield loss is tracked across attacks only; Pip triggers on lock actions and on spending a lock.
+- ◐ Jory Falk triggers on his own focus action only (not tokens handed to him); Kip Kestrel triggers when a green maneuver clears stress.
+- ◐ Rell Tamsin locks the attacker after its dice are rolled (same effect, later moment); Fennick Rowe's choice is made at the same moment.
+- ◐ Servo Wings: flip offered right before your reveal (not at the very start of the phase); start side is open.
+- ◐ Field Refit: the second Modification slot works; the Elite cost discount is not applied; Spare Munitions restores a discarded card at the next opportunity (after the attack / maneuver / action).
+- ◐ Hooked: the “when destroyed, damage ships at Range 1” clause is not implemented. Heckler Drone cannot lock friendly ships.
+- ◐ Casso Andrel guesses at the start of the Activation phase (after both dials are locked) instead of the end of Planning.
+- Skipped: the two docking titles for the Skiff and Tern (they need a large carrier ship that isn't in the game).
 
 ## Not yet
 - ⬜ Missions (escort, asteroid run, satellites) — see WORKSTREAMS.md

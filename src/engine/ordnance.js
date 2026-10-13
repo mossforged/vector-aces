@@ -10,6 +10,7 @@ import { rollDice } from './dice.js';
 import { sufferDamage, dealDamageCard } from './damage.js';
 import { addStress } from './effects.js';
 import { liveShips, shipName, shipPoly } from './queries.js';
+import { everyone, foldAll } from './hooks.js';
 
 /** Outline polygon(s) of a token. */
 export function ordnancePolys(tok) {
@@ -69,6 +70,7 @@ const EFFECTS = {
 
 function detonate(state, tok, victims) {
   const def = ORDNANCE[tok.type];
+  everyone(state, 'onDetonate', tok, victims); // side effects only (e.g. extra damage nearby)
   removeToken(state, tok);
   emit(state, { type: 'detonate', ordnance: tok.type, x: tok.x, y: tok.y, kind: def.kind });
   log(state, `${def.name} detonates${victims.length ? '' : ' harmlessly'}!`);
@@ -93,6 +95,7 @@ export const steps = {
   detonateBombs(state) {
     for (const tok of state.ordnance.slice()) {
       if (ORDNANCE[tok.type].kind !== 'bomb') continue;
+      if (!foldAll(state, 'bombDetonates', true, tok, inBlast(state, tok))) { log(state, `${ORDNANCE[tok.type].name} is held back from detonating.`); continue; }
       detonate(state, tok, inBlast(state, tok));
       if (state.winner) return;
     }

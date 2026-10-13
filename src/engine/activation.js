@@ -60,7 +60,8 @@ export function submitDials(state, player, dials) {
 }
 
 const ION_MANEUVER = { key: '1S', speed: 1, bearing: 'S', color: 'w' };
-const maneuverFor = (ship, key) => dialFor(ship.chassis).find(m => m.key === key);
+// Off-dial maneuvers (a card may turn e.g. a 3-turn into a 3 Tallon roll) are parsed from the key.
+const maneuverFor = (ship, key) => dialFor(ship.chassis).find(m => m.key === key) || parseManeuver(`${key}:w`);
 
 export const steps = {
   startRound(state) {
@@ -82,6 +83,7 @@ export const steps = {
     state.phase = 'activation';
     const order = skillOrder(state, 1);
     push(state,
+      ...everyone(state, 'startActivation'),
       ...order.filter(s => s.cloaked).map(s => ({ t: 'decloak', ship: s.id })),
       ...order.map(s => ({ t: 'activate', ship: s.id })),
       { t: 'detonateBombs' },
@@ -123,7 +125,7 @@ export const steps = {
     const ship = state.ships[s.ship];
     if (ship.destroyed) return;
     const mv = ship.round.maneuver;
-    if (ship.stress > 0 && mv.color === 'r') {
+    if (ship.stress > 0 && mv.color === 'r' && !flag(state, ship, 'redWhileStressed')) {
       const opp = enemyOf(state, ship.owner);
       const opts = dialFor(ship.chassis).filter(x => maneuverColor(state, ship, x) !== 'r')
         .map(x => ({ id: x.key, label: x.key, maneuver: { ...x, color: maneuverColor(state, ship, x) } }));
@@ -185,6 +187,7 @@ export const steps = {
     if ((bumped.length || hitObstacle) && hasFaceup(ship, 'dazed')) after.push({ t: 'simpleDamage', ship: ship.id, hits: 1, why: 'Dazed' });
     if (color === 'r' && hasFaceup(ship, 'hull_breach')) after.push({ t: 'rollForDamage', ship: ship.id, why: 'Hull Breach' });
     after.push(...ownSteps(state, ship, 'afterManeuver', color, { blocked: ship.round.skipAction, bumped: bumped.length > 0 }));
+    after.push(...everyone(state, 'anyManeuver', ship, color, { bumped: bumped.length > 0, hitObstacle }));
     push(state, ...after, ...(s.slam ? [] : [{ t: 'actionStep', ship: ship.id }]));
   },
 

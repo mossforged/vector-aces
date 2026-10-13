@@ -68,7 +68,7 @@ export function botAction(state, player, rng = Math.random) {
 export async function randomSquad(faction, rng = Math.random, limit = 100) {
   const { PILOTS } = await import('../data/pilots.js');
   const { UPGRADES } = await import('../data/upgrades.js');
-  const { validateSquad, upgradeAllowed, squadPoints } = await import('../engine/index.js');
+  const { validateSquad, upgradeAllowed, squadPoints, slotsFor } = await import('../engine/index.js');
   const pilots = Object.values(PILOTS).filter(p => p.faction === faction);
   const pickOne = arr => arr[Math.floor(rng() * arr.length)];
   for (let tries = 0; tries < 200; tries++) {
@@ -77,10 +77,13 @@ export async function randomSquad(faction, rng = Math.random, limit = 100) {
       const p = pickOne(pilots);
       const e = { pilot: p.id, upgrades: [] };
       const free = p.slots.slice();
-      for (const slot of free) {
+      for (let k = 0; k < free.length; k++) {
         if (rng() < 0.35) continue;
-        const opts = Object.values(UPGRADES).filter(u => u.slot === slot && upgradeAllowed(p.id, u.id));
-        if (opts.length) e.upgrades.push(pickOne(opts).id);
+        const opts = Object.values(UPGRADES).filter(u => u.slot === free[k] && upgradeAllowed(p.id, u.id, e.upgrades));
+        if (!opts.length) continue;
+        const u = pickOne(opts);
+        e.upgrades.push(u.id);
+        free.push(...(u.grants || [])); // slots granted by this upgrade get filled too
       }
       squad.push(e);
       if (validateSquad(faction, squad, limit).length) { squad.pop(); if (squadPoints(squad) > limit - 12) break; }

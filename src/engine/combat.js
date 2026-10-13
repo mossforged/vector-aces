@@ -27,7 +27,7 @@ const STAGE_TEXT = {
 };
 const ATTACKER_STAGES = ['preRoll', 'afterRoll', 'attack'];
 
-const onObstacle = (state, ship) => obstaclePolys(state).some(o => polygonsIntersect(shipPoly(ship), o));
+const onObstacle = (state, ship) => !hasFlag(state, ship, 'attackOnObstacle') && obstaclePolys(state).some(o => polygonsIntersect(shipPoly(ship), o));
 const weaponDef = a => (a.weapon === 'primary' ? {} : CARDS[a.weapon]?.weapon || {});
 
 // ---------------- target & weapon selection ----------------
@@ -49,7 +49,7 @@ export function attackOptions(state, ship, { only = null } = {}) {
     for (const u of ship.upgrades) {
       const w = UPGRADES[u.id].weapon;
       if (u.discarded || !w || (only && !only.includes(u.id))) continue;
-      const geo = w.turret ? turretGeometry(state, ship, e) : frontGeometry(state, ship, e);
+      const geo = w.turret || hasFlag(state, ship, 'turretWeapon', u.id) ? turretGeometry(state, ship, e) : frontGeometry(state, ship, e);
       if (!geo || !geo.band || blocked(geo)) continue;
       const [lo, hi] = fold(state, ship, 'weaponRange', [w.minRange, w.maxRange], w);
       if (geo.band < lo || geo.band > hi) continue;
@@ -68,13 +68,14 @@ export function attackOptions(state, ship, { only = null } = {}) {
 function beginAttack(state, ship, opt, extra = {}) {
   const target = state.ships[opt.target];
   const w = opt.weapon === 'primary' ? null : UPGRADES[opt.weapon].weapon;
-  const geo = !w ? attackGeometry(state, ship, target) : w.turret ? turretGeometry(state, ship, target) : frontGeometry(state, ship, target);
+  const geo = !w ? attackGeometry(state, ship, target) : w.turret || hasFlag(state, ship, 'turretWeapon', opt.weapon) ? turretGeometry(state, ship, target) : frontGeometry(state, ship, target);
   const a = state.attack = {
     attacker: ship.id, defender: target.id, weapon: opt.weapon, band: geo.band, obstructed: geo.obstructed, line: geo.line, arc: geo.arc || 'front',
     attackDice: [], defenseDice: [], used: [], bonusDice: 0, hit: false, dealt: [], result: null, ...extra,
   };
   if (w && !a.second) {
-    if (opt.pay === 'focus') spendFocus(state, ship);
+    // "Attack (focus)" needs a focus token; it is only spent if the card says so (or it stands in for a lock).
+    if (opt.pay === 'focus' && (w.spend || w.cost === 'lock')) spendFocus(state, ship);
     else if (w.cost === 'lock' && w.spend) { mark(a, 'lock'); spendLock(state, ship); }
     if (w.discard) {
       if (hasFlag(state, ship, 'discardOnlyOnHit')) a.discardIfHit = true;
@@ -94,13 +95,13 @@ function coreOptions(state, a, stage) {
   const atk = state.ships[a.attacker], def = state.ships[a.defender];
   const opts = [];
   if (stage === 'attack') {
-    if (atk.lockOn === a.defender && once(a, 'lock') && attackRerollAllowed(state, a)) {
+    if (atk.lockOn === a.defender && once(a, 'lock') && attackRerollAllowed(state, a) && !atk.round.noTokenMods && !weaponDef(a).onlyFocusMods) {
       for (const o of rerollOptions(a, 'lock', 'Spend lock', 'attack', ['blank', 'focus'], Infinity)) {
         const apply = o.apply;
         opts.push({ ...o, apply(st, a2) { apply(st, a2); spendLock(st, st.ships[a2.attacker]); } });
       }
     }
-    if (atk.tokens.focus > 0 && count(a.attackDice, 'focus') && once(a, 'focus') && attackFocusAllowed(state, a)) {
+    if (atk.tokens.focus > 0 && count(a.attackDice, 'focus') && once(a, 'focus') && attackFocusAllowed(state, a) && !atk.round.noTokenMods) {
       opts.push({ id: 'focus', label: 'Spend focus: all focus → hit', apply(st, a2) {
         for (const d of a2.attackDice) if (d.face === 'focus') d.face = 'hit';
         mark(a2, 'focus'); spendFocus(st, st.ships[a2.attacker]);
@@ -128,9 +129,11 @@ export function stageOptions(state, stage) {
   const atk = state.ships[a.attacker], def = state.ships[a.defender];
   const player = ATTACKER_STAGES.includes(stage) ? atk.owner : def.owner;
   const options = [...coreOptions(state, a, stage)];
+  // onlyFocusMods weapons: the attacker may modify its dice only by spending focus normally.
+  const focusOnly = ATTACKER_STAGES.includes(stage) && weaponDef(a).onlyFocusMods;
   if (ATTACKER_STAGES.includes(stage) && weaponDef(a).options) options.push(...weaponDef(a).options(state, a, stage));
   for (const s of liveShips(state)) {
-    if (s.owner !== player) continue;
+    if (s.owner !== player || focusOnly) continue;
     for (const c of cardsOf(s)) if (c.options) options.push(...c.options(state, s, a, stage));
   }
   return { player, options };
@@ -269,7 +272,9 @@ export const steps = {
       log(state, `${shipName(r)} takes the hit for ${shipName(def)}!`);
       sufferDamage(state, r, 0, a.redirect.crits);
     }
-    if (hits + crits === 0) log(state, a.hit ? `${shipName(def)} is hit but shrugs it off.` : `The attack misses ${shipName(def)}.`);
+    const special = weaponDef(a).replaceDamage;
+    if (special && hits + crits > 0) special(state, a); // "if this attack hits, <effect>. Then cancel all dice results."
+    else if (hits + crits === 0) log(state, a.hit ? `${shipName(def)} is hit but shrugs it off.` : `The attack misses ${shipName(def)}.`);
     else {
       log(state, `${shipName(def)} is hit: ${hits} damage, ${crits} critical.`);
       sufferDamage(state, def, hits, crits, { attacker: atk, track: a.dealt });

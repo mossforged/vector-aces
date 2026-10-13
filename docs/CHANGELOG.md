@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-13 — league content batch
+- 7 ships (Pavise, Saber, Skiff, Longbow, Ironwood, Hammerhead, Tern), 47 pilots, 68 upgrades (drones, torpedoes, missiles, cannons, turrets, League crew, titles/mods), 2 conditions; original art and 3 presets.
+- Engine additions shared by all batches: upgrades can grant slots (`grants`, `minSkill`, `noSlot`; `slotsFor()` used by validation, builder and random squads); off-dial maneuvers; new hooks `startActivation`, `anyManeuver`, `anyAction`, `boostTemplates`, `lockTargets`, `turretWeapon`, `redWhileStressed`, `attackOnObstacle`, `bombDetonates`, `onDetonate`; weapon `replaceDamage` / `onlyFocusMods`; `round.noTokenMods`. "Attack (focus)" now only spends the focus when the card says so.
+- Rebuilt every gen file so new titles add Title slots to base ships (Bulwark, Dart, Wasp).
+
 ## 2026-10-13 — v0.5 AI games & production value
 - *Vs computer* and *Watch AI battle* lobby modes; pause and 1×/2×/4× playback from the top bar. Smarter bot dials (lines up shots, avoids rocks and red moves while stressed).
 - Ships always fly their whole path: one shared playback timeline for the table and dice; long backlogs speed up instead of skipping. The next decision waits until the table catches up.

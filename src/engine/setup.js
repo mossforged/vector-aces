@@ -16,13 +16,25 @@ export function squadPoints(squad) {
   return squad.reduce((n, e) => n + PILOTS[e.pilot].cost + (e.upgrades || []).reduce((m, u) => m + UPGRADES[u].cost, 0), 0);
 }
 
+/**
+ * Upgrade slots a pilot has with these upgrades fitted: its own bar plus any slots granted by
+ * fitted upgrades (`grants: ['elite']`, e.g. a drone that adds an Elite slot).
+ */
+export function slotsFor(pilotId, upgradeIds = []) {
+  const slots = PILOTS[pilotId].slots.slice();
+  for (const u of upgradeIds) for (const g of UPGRADES[u]?.grants || []) slots.push(g);
+  return slots;
+}
+
 /** Upgrade ids a pilot could legally equip in some slot (ignores uniqueness and points). */
-export function upgradeAllowed(pilotId, upgradeId) {
+export function upgradeAllowed(pilotId, upgradeId, upgradeIds = []) {
   const p = PILOTS[pilotId], u = UPGRADES[upgradeId], ch = SHIPS[p.ship];
   if (u.faction && u.faction !== p.faction) return false;
   if (u.ships && !u.ships.includes(p.ship)) return false;
   if (u.sizes && !u.sizes.includes(ch.size)) return false;
-  return p.slots.includes(u.slot);
+  if (u.minSkill && p.skill < u.minSkill) return false;
+  if (u.noSlot && p.slots.includes(u.noSlot)) return false;
+  return slotsFor(pilotId, upgradeIds.filter(x => x !== upgradeId)).includes(u.slot);
 }
 
 /** Returns a list of human-readable problems with a squad (empty = legal). */
@@ -37,11 +49,11 @@ export function validateSquad(faction, squad, pointLimit = Infinity) {
     if (p.faction !== faction) errs.push(`${p.name} is not a ${FACTIONS[faction].short} pilot.`);
     const names = [p.unique ? p.name : null, ...(e.upgrades || []).map(u => (UPGRADES[u]?.unique ? UPGRADES[u].name : null))].filter(Boolean);
     for (const n of names) { if (uniques.has(n)) errs.push(`Only one "${n}" allowed.`); uniques.add(n); }
-    const slots = p.slots.slice();
+    if ((e.upgrades || []).some(u => !UPGRADES[u])) { errs.push(`Unknown upgrade in ${p.name}'s loadout`); continue; }
+    const slots = slotsFor(e.pilot, e.upgrades || []);
     for (const u of e.upgrades || []) {
       const def = UPGRADES[u];
-      if (!def) { errs.push(`Unknown upgrade ${u}`); continue; }
-      if (!upgradeAllowed(e.pilot, u)) { errs.push(`${def.name} can't be fitted to ${p.name}.`); continue; }
+      if (!upgradeAllowed(e.pilot, u, e.upgrades)) { errs.push(`${def.name} can't be fitted to ${p.name}.`); continue; }
       const i = slots.indexOf(def.slot);
       if (i < 0) errs.push(`${p.name} has no free ${def.slot} slot for ${def.name}.`); else slots.splice(i, 1);
     }

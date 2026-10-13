@@ -4,7 +4,7 @@ import { PILOTS } from '../data/pilots.js';
 import { UPGRADES, SLOT_LABELS } from '../data/upgrades.js';
 import { FACTIONS } from '../data/factions.js';
 import { PRESET_SQUADS } from '../data/presets.js';
-import { squadPoints, validateSquad, upgradeAllowed } from '../engine/index.js';
+import { squadPoints, validateSquad, upgradeAllowed, slotsFor } from '../engine/index.js';
 import { randomSquad } from '../ai/simpleBot.js';
 import { esc } from './glyphs.js';
 import { cardLink } from './names.js';
@@ -61,9 +61,9 @@ export function mountSquadBuilder(el, { faction, squad, limit = 100, onChange })
   function shipRow(e, i) {
     const p = PILOTS[e.pilot];
     const used = [...(e.upgrades || [])];
-    const selects = p.slots.map((slot, k) => {
+    const selects = slotsFor(p.id, e.upgrades || []).map((slot, k) => {
       if (NOT_YET.has(slot)) return `<select disabled title="${SLOT_LABELS[slot]} upgrades are not in the game yet"><option>${SLOT_LABELS[slot]}: coming soon</option></select>`;
-      const opts = Object.values(UPGRADES).filter(u => u.slot === slot && upgradeAllowed(p.id, u.id));
+      const opts = Object.values(UPGRADES).filter(u => u.slot === slot && upgradeAllowed(p.id, u.id, e.upgrades || []));
       if (!opts.length) return '';
       const cur = used.find(u => UPGRADES[u].slot === slot);
       if (cur) used.splice(used.indexOf(cur), 1);

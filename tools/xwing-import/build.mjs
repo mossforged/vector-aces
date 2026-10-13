@@ -78,6 +78,7 @@ function buildBatch(cat) {
     if (u.faction) out.faction = MAPS.FACTION_MAP[u.faction];
     if (u.ship) out.ships = u.ship.map(n => shipIdByName[n]).filter(Boolean);
     if (u.size) out.sizes = u.size;
+    for (const k of ['grants', 'minSkill', 'noSlot']) if (c[k] !== undefined) out[k] = c[k];
     if (c.ordnance) { out.ordnance = c.ordnance; if (c.mine) out.mine = true; if (c.keep) out.keep = true; }
     if (c.weapon) {
       const [minRange, maxRange] = range(u.range);
