@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-10-13 — original cards in the ship panel
+- The names toggle (top bar / key N) is now “Original names & cards”: while on, each ship's panel also shows its original pilot card and upgrade cards as pictures (hover an upgrade for a big view). The pictures load from the community dataset at runtime and are never bundled; hosts that block outside images show a note instead.
+
 ## 2026-10-13 — v0.7 large ships + card previews
 - New "large" batch: 13 large ships (80 mm bases) for all three factions — Hauler, Lantern, Heron, Drifter, Bastille, Mandible, Hulk, Hearth, Leaper, Prowler, Raven, Pelican, Thunderhead — with 65 pilots, 31 upgrades (large-only mods, systems, illicit, titles) and the “Shaken” condition; original art and 5 presets.
 - Mechanics: large bases everywhere (moves, rolls, bomb drops, rendering, bot), the Prowler's rotating mobile arc (Rotate Arc action), docking (Mothership + Lifeboat: launch from the carrier's rear, rear arc while docked, emergency launch), reserve ships (Hound's Lair's Pup Pilot, hidden from the squad builder), shared pilot abilities (Hunter Network), ship obstruction (Screen Jammer), Segnor's loop on a turn template, a persistent cargo cloud token. New hooks: `arcs`, `anyLockTargets`, `anyStress`, `rerollCap`, `preventDestroy`, flags `noPrimary`, `obstructs`, `friendReach`.

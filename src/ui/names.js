@@ -64,6 +64,8 @@ export function cardLink(id) {
 // Hovering a "card ↗" link shows our card (name, cost, text) next to the original card image.
 // The image is loaded from the dataset repo; where the host blocks it, the popup says so.
 const RAW_BASE = 'https://raw.githubusercontent.com/guidokessels/xwing-data/master/images/';
+/** URL of the original card image for a pilot / upgrade / condition id (null if none). Loaded at runtime, never bundled. */
+export const cardImageUrl = id => (O.images?.[id] ? RAW_BASE + O.images[id].split('/').map(encodeURIComponent).join('/') : null);
 let pop = null;
 function cardInfo(id) {
   const p = PILOTS[id], u = UPGRADES[id], c = CONDITIONS[id];
@@ -89,8 +91,8 @@ function showPop(a) {
   pop.style.left = `${left}px`; pop.style.top = `${top}px`;
 }
 if (typeof document !== 'undefined') {
-  document.addEventListener('mouseover', e => { const a = e.target.closest?.('.orig-link[data-card]'); if (a) showPop(a); });
-  document.addEventListener('mouseout', e => { if (e.target.closest?.('.orig-link[data-card]') && pop) pop.remove(); });
+  document.addEventListener('mouseover', e => { const a = e.target.closest?.('.orig-link[data-card], .ca-ups [data-card]'); if (a) showPop(a); });
+  document.addEventListener('mouseout', e => { if (e.target.closest?.('.orig-link[data-card], .ca-ups [data-card]') && pop) pop.remove(); });
 }
 const syncRootClass = () => document.documentElement.classList.toggle('show-original', original);
 syncRootClass();
@@ -173,11 +175,11 @@ export function namesToggleButton() {
   b.className = 'btn ghost small names-toggle';
   b.type = 'button';
   const sync = () => {
-    b.textContent = original ? 'Names: original' : 'Names: Vector Aces';
+    b.textContent = original ? 'Original names & cards: on' : 'Original names & cards: off';
     b.setAttribute('aria-pressed', String(original));
     b.dataset.noswap = '1';
   };
-  b.title = 'Swap between the re-themed names and the original game’s names (only on your screen). Shortcut: N';
+  b.title = 'Show the original game’s names and card pictures (only on your screen). Shortcut: N';
   b.onclick = () => setOriginal(!original);
   onNamesChange(sync); sync();
   return b;

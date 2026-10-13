@@ -29,6 +29,8 @@ class App {
     this.bots = new Set(); this.auto = { paused: false, fails: 0 };
     $('#names-toggle-game').append(namesToggleButton());
     $('#names-toggle-lobby').append(namesToggleButton());
+    // Flipping the toggle shows or hides the card pictures in the ship panel right away.
+    onNamesChange(() => { if (this.state) renderShipCards($('#cards'), { state: this.state, me: this._viewer(), selected: this.ui.selected, onSelect: x => this.select(x) }); });
     document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => {
       const c = this.board.camera, k = b.dataset.cam;
       if (k === 'left') c.spin(Math.PI / 4); else if (k === 'right') c.spin(-Math.PI / 4); else this.board.setView(k);
