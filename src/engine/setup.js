@@ -9,6 +9,7 @@ import { shuffle, nextRandom, seedFromString } from './rng.js';
 import { push, enqueue, ask, log, RuleError } from './flow.js';
 import { basePolygon, placeShape, polygonsIntersect, polygonInsideBoard, distanceToEdge } from './geometry.js';
 import { shipList, pilot, obstaclePolys, overlapsAnyShip, effectiveSkill, shipName, stat } from './queries.js';
+import { fold } from './hooks.js';
 
 export const ENGINE_VERSION = 2;
 
@@ -18,7 +19,7 @@ export function entryPoints(e) {
   const discounts = ups.map(u => UPGRADES[u].discount).filter(Boolean);
   return PILOTS[e.pilot].cost + ups.reduce((m, u) => {
     let c = UPGRADES[u].cost;
-    for (const d of discounts) if (UPGRADES[u].slot === d.slot) c = Math.max(0, c - d.amount);
+    for (const d of discounts) if ((d.slot === '*' && UPGRADES[u].discount !== d) || UPGRADES[u].slot === d.slot) c = Math.max(0, c - d.amount);
     return m + c;
   }, 0);
 }
@@ -34,6 +35,12 @@ export function squadPoints(squad) {
 export function slotsFor(pilotId, upgradeIds = []) {
   let slots = PILOTS[pilotId].slots.slice();
   for (const u of upgradeIds) for (const g of UPGRADES[u]?.grants || []) slots.push(g);
+  // grantsOneOf: the card adds ONE of these slots — whichever another fitted upgrade uses (all are offered until then).
+  for (const u of upgradeIds) {
+    const one = UPGRADES[u]?.grantsOneOf; if (!one) continue;
+    const used = upgradeIds.map(x => UPGRADES[x]?.slot).find(sl => one.includes(sl) && !PILOTS[pilotId].slots.includes(sl));
+    slots.push(...(used ? [used] : one));
+  }
   for (const u of upgradeIds) for (const r of UPGRADES[u]?.removes || []) slots = slots.filter(x => x !== r); // e.g. a title that strips missile slots
   return slots;
 }
@@ -47,6 +54,9 @@ export function upgradeAllowed(pilotId, upgradeId, upgradeIds = []) {
   if (u.minSkill && p.skill < u.minSkill) return false;
   if (u.noSlot && p.slots.includes(u.noSlot)) return false;
   if (u.maxHull && ch.hull > u.maxHull) return false;
+  if (u.shieldValue !== undefined && ch.shields !== u.shieldValue) return false;
+  if (u.needsAction && !ch.actions.includes(u.needsAction)) return false;
+  if (u.needsSlots && !u.needsSlots.every(sl => p.slots.includes(sl))) return false;
   if (u.maxAgility !== undefined && ch.agility > u.maxAgility) return false;
   return slotsFor(pilotId, upgradeIds.filter(x => x !== upgradeId)).includes(u.slot);
 }
@@ -70,6 +80,7 @@ export function validateSquad(faction, squad, pointLimit = Infinity) {
       if (!upgradeAllowed(e.pilot, u, e.upgrades)) { errs.push(`${def.name} can't be fitted to ${p.name}.`); continue; }
       const i = slots.indexOf(def.slot);
       if (i < 0) errs.push(`${p.name} has no free ${def.slot} slot for ${def.name}.`); else slots.splice(i, 1);
+      if (def.requiresUpgrade && !(e.upgrades || []).includes(def.requiresUpgrade)) errs.push(`${def.name} needs ${UPGRADES[def.requiresUpgrade]?.name} fitted too.`);
     }
   }
   if (squadPoints(squad) > pointLimit) errs.push(`Squad is ${squadPoints(squad)} points (limit ${pointLimit}).`);
@@ -215,8 +226,9 @@ function autoDeployPose(state, ship) {
 
 function deployOrder(state) {
   const others = p => (p === state.initiative ? 0 : 1);
+  const sk = s => fold(state, s, 'deploySkill', pilot(s).skill);
   return shipList(state).slice().sort((a, b) =>
-    pilot(a).skill - pilot(b).skill || others(a.owner) - others(b.owner) || state.shipOrder.indexOf(a.id) - state.shipOrder.indexOf(b.id));
+    sk(a) - sk(b) || others(a.owner) - others(b.owner) || state.shipOrder.indexOf(a.id) - state.shipOrder.indexOf(b.id));
 }
 
 export const steps = {

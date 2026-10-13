@@ -28,12 +28,14 @@ export function ordnancePolys(tok) {
 const depth = def => (def.shape.type === 'circle' ? def.shape.r * 2 : def.shape.h);
 
 /** Drop one ordnance card's token(s) behind the ship. */
-export function dropOrdnance(state, ship, type) {
+export function dropOrdnance(state, ship, type, { front = false } = {}) {
   const def = ORDNANCE[type];
   const half = CONFIG.baseSize.small / 2;
   // Timed bombs can be launched ahead along a 5-straight template by some cards; mines are always dropped.
   const launch = def.kind === 'bomb' && flag(state, ship, 'launchBombs');
-  const back = launch ? mul(fwd(ship.pose.h), half + 5 * CONFIG.straightPerSpeed + depth(def) / 2) : mul(fwd(ship.pose.h), -(half + CONFIG.straightPerSpeed + depth(def) / 2));
+  const len = (flag(state, ship, 'longDrop') ? 2 : 1) * CONFIG.straightPerSpeed; // longDrop: 2-straight template
+  const back = launch ? mul(fwd(ship.pose.h), half + 5 * CONFIG.straightPerSpeed + depth(def) / 2)
+    : mul(fwd(ship.pose.h), (front ? 1 : -1) * (half + len + depth(def) / 2));
   const centre = add(ship.pose, back);
   const n = def.cluster || 1, gap = (def.shape.w || def.shape.r * 2) + 4;
   for (let i = 0; i < n; i++) {
@@ -48,8 +50,8 @@ export function dropOrdnance(state, ship, type) {
 
 const removeToken = (state, tok) => { state.ordnance = state.ordnance.filter(t => t.id !== tok.id); };
 
-function rollAndSuffer(state, ship, n, why) {
-  const faces = rollDice(state, 'attack', n).map(d => d.face);
+function rollAndSuffer(state, ship, n, why, tok) {
+  const faces = foldAll(state, 'bombRoll', rollDice(state, 'attack', n).map(d => d.face), ship, tok); // may reroll faces
   emit(state, { type: 'roll', ship: ship.id, faces, reason: why });
   log(state, `${why}: ${shipName(ship)} rolls ${faces.join(', ')}.`);
   sufferDamage(state, ship, faces.filter(f => f === 'hit').length, faces.filter(f => f === 'crit').length);
@@ -61,8 +63,8 @@ const EFFECTS = {
   proton_bomb: (state, s) => dealDamageCard(state, s, true),
   ion_bomb: (state, s) => { s.ion = (s.ion || 0) + 2; log(state, `${shipName(s)} is ionized.`); },
   thermal: (state, s) => { sufferDamage(state, s, 1, 0); if (!s.destroyed) addStress(state, s); },
-  bomblet: (state, s) => rollAndSuffer(state, s, 2, 'Bomblet'),
-  prox_mine: (state, s) => rollAndSuffer(state, s, 3, 'Proximity mine'),
+  bomblet: (state, s, tok) => rollAndSuffer(state, s, 2, 'Bomblet', tok),
+  prox_mine: (state, s, tok) => rollAndSuffer(state, s, 3, 'Proximity mine', tok),
   snare_net: (state, s) => { sufferDamage(state, s, 1, 0); if (!s.destroyed) { s.ion = (s.ion || 0) + 2; s.round.skipAction = true; log(state, `${shipName(s)} is tangled in a snare net.`); } },
   cluster_mine: (state, s) => {
     const faces = rollDice(state, 'attack', 2).map(d => d.face);
@@ -77,7 +79,7 @@ function detonate(state, tok, victims) {
   removeToken(state, tok);
   emit(state, { type: 'detonate', ordnance: tok.type, x: tok.x, y: tok.y, kind: def.kind });
   log(state, `${def.name} detonates${victims.length ? '' : ' harmlessly'}!`);
-  for (const s of victims) if (!s.destroyed) EFFECTS[tok.type](state, s);
+  for (const s of victims) if (!s.destroyed && !flag(state, s, 'ignoreBomb', tok)) EFFECTS[tok.type](state, s, tok);
 }
 
 /** Ships at Range 1 of a token. */

@@ -38,6 +38,7 @@ export function acquireLock(state, ship, target) {
   ship.lockOn = target.id;
   emit(state, { type: 'lock', ship: ship.id, target: target.id });
   log(state, `${shipName(ship)} locks onto ${shipName(target)}.`);
+  push(state, ...ownSteps(state, target, 'onLocked', ship));
 }
 
 /**

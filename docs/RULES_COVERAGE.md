@@ -88,7 +88,7 @@ Head Wound (no pilot ability / elite upgrades).
 - ◐ Rell Tamsin locks the attacker after its dice are rolled (same effect, later moment); Fennick Rowe's choice is made at the same moment.
 - ◐ Servo Wings: flip offered right before your reveal (not at the very start of the phase); start side is open.
 - ◐ Field Refit: the second Modification slot works; the Elite cost discount is not applied; Spare Munitions restores a discarded card at the next opportunity (after the attack / maneuver / action).
-- ◐ Hooked: the “when destroyed, damage ships at Range 1” clause is not implemented. Heckler Drone cannot lock friendly ships.
+- ◐ Heckler Drone cannot lock friendly ships.
 - ◐ Casso Andrel guesses at the start of the Activation phase (after both dials are locked) instead of the end of Planning.
 - Skipped: the two docking titles for the Skiff and Tern (they need a large carrier ship that isn't in the game).
 
@@ -103,6 +103,16 @@ Head Wound (no pilot ability / elite upgrades).
 - ◐ Fire Solver and The Sovereign's named die: other effects that change specific faces can still apply afterwards. Marksman cancels an evade before the defender modifies (not at compare).
 - ◐ Tovar Brisk restores a discarded Elite card at the next check (after an attack, maneuver, action or the End phase). Signal Relay / Focus Optics cap the token at the next action or start of combat.
 - ◐ Gunboat Config / Arsenal Config: the extra slots work; firing while weapons are disabled is not implemented. Beetle Shuttle's 4-point crew limit isn't enforced. Light Frame's agility limit and Thrust Damper's hull limit are enforced.
+
+## Content batch: syndicate (7 ships, 55 pilots, 71 upgrades, 2 conditions)
+- Ships: Adder, Gnat, Raptor, Bloodhound, Warden, Hopper, Gharial; Syndicate pilots for Bulwark, Courier, Sparrow and the Hammerhead.
+- ✅ All 34 pilot abilities and all Crew / Illicit / Salvaged Drone / Modification / Syndicate cards implemented, incl. Tweek copying an enemy's skill or whole pilot ability, one-of slot grants (Heavy Gnat), squad-wide cost cuts (Gilded Raptor), on-destroyed effects (Spite Charge, Hooked), Matriarch spare tokens.
+- ◐ Fire Engineer: the second lock only counts for lock rerolls (not for “Attack (lock)” weapons). Rogue Drone locks friendly ships but can't attack them.
+- ◐ Dace Bonner reacts to ion from attacks; Ion Vents is checked in the End phase (the enemy always declines the token). Rousing Recruit and Kip-style stress triggers react to green maneuvers.
+- ◐ Captain Jostar reacts to damage suffered outside attacks (bombs, asteroids, splash). Bosh's “adjacent” maneuvers are the neighbours on the dial list.
+- ◐ Sol Sixa slides a dropped token to the rear-left/right; Constable Zuvo drops ahead with a 1-straight; Bomb Chief uses a 2-straight drop.
+- ◐ Pace Droid always deploys at skill 8. Tweek's “start of the game” choice happens at the start of round 1's Activation (Mimicked doesn't copy card actions).
+- Skipped: Nashtah Pup Pilot and the IG-2000 crew card (they need a large ship), and the Energy crew card (huge ships only).
 
 ## Not yet
 - ⬜ Missions (escort, asteroid run, satellites) — see WORKSTREAMS.md

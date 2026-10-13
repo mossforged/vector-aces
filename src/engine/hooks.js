@@ -17,7 +17,9 @@
 //   discardOnlyOnHit, turretWeapon(upgradeId) (that secondary fires outside the arc), redWhileStressed,
 //   attackOnObstacle, stressedAction(actionId) (allowed while stressed), delayStress (red-maneuver stress after
 //   the action step), phaseRocks (repositions may overlap asteroids; no crits from asteroids), launchBombs
-//   decloakPositions(state, ship, options[]) VALUE hook
+//   decloakPositions(state, ship, options[]) VALUE hook; deploySkill(state, ship, skill) VALUE hook (deployment order)
+//   takeFaceup(opts) / dealFaceup(defender): next Damage card dealt faceup; longDrop (2-straight bomb drops);
+//   ignoreBomb(tok); bombRoll(ship, tok, faces) FOLD over every ship → faces
 // WEAPON effects are NOT hooks on the owner: they live under `weapon: {...}` and combat looks them
 //   up by the weapon being fired (see cards/weapons.js).
 // ATTACK hooks (called for EVERY ship on the table; check roles via a.attacker / a.defender):
@@ -34,7 +36,8 @@
 // EVENT hooks (own ship) returning steps[] to run next (may be empty):
 //   beforeReveal, onReveal(m) (may edit ship.round.maneuver), afterManeuver(color, {blocked, bumped}),
 //   afterAction(actionId),
-//   onSpendFocus, onSpendLock(targetId), onStress, afterDrop(ordnanceType)
+//   onSpendFocus, onSpendLock(targetId), onStress, afterDrop(ordnanceType), afterDecloak, onLocked(byShip),
+//   onDestroyed (the ship's own cards, as it is destroyed)
 // onDealt(state, ship, cardId, faceup, cardDef) → 'discard' to throw the dealt Damage card away
 // PHASE hooks (every ship) returning steps[]:  startActivation, startCombat, endPhase
 // WATCH hooks (every ship; owner 2nd arg) returning steps[]:
@@ -42,6 +45,9 @@
 //   anyAction(ship, actionId)                         after any ship performs an action
 //   anySpendFocus(ship)                               after any ship spends a focus token
 //   combatActive(ship)                                when a ship becomes the active ship in the Combat phase
+//   anyActivate(ship)                                 when a ship becomes active in the Activation phase (before reveal)
+//   anyDamaged(ship)                                  a ship suffers damage outside an attack it is defending against
+//   anyDestroyed(ship)                                after a ship is destroyed
 // FOLD over every ship (owner 2nd arg):
 //   denyTokens(ship, ctx, a, v) → true blocks: 'attackFocus' | 'defenseFocus' | 'evadeToken' | 'action:<id>'
 //   blockMods(a, side, v) → true: that side ('attacker' | 'defender') can't modify its own dice this attack

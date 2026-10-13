@@ -862,6 +862,10 @@ export default {
     },
   },
   hooked: {
+    onDestroyed(state, ship) {
+      const around = nearby(state, ship).map(s => s.id);
+      return around.length ? [{ t: 'splashDamage', ships: around, why: 'Hooked wreck' }] : [];
+    },
     afterAttack(state, owner, a) {
       if (!isDefender(owner, a) || !a.result || a.result.crits < 1 || owner.destroyed || !condition(owner, 'hooked')) return [];
       dropCondition(owner, 'hooked');

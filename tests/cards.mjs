@@ -36,7 +36,7 @@ export async function runCardSim(games = 600, { quiet = false } = {}) {
     let host = PILOTS[id] ? { pilot: id, upgrades: [] } : null;
     if (!host) {
       for (const p of Object.values(PILOTS)) {
-        const pre = Object.values(UPGRADES).filter(u => u.grants && upgradeAllowed(p.id, u.id) && (u.grants.includes(UPGRADES[id].slot)));
+        const pre = Object.values(UPGRADES).filter(u => (u.grants || u.grantsOneOf) && upgradeAllowed(p.id, u.id) && [...(u.grants || []), ...(u.grantsOneOf || [])].includes(UPGRADES[id].slot));
         for (const extra of [[], ...pre.map(u => [u.id])]) {
           if (upgradeAllowed(p.id, id, extra) && !validateSquad(p.faction, [{ pilot: p.id, upgrades: [...extra, id] }]).length) { host = { pilot: p.id, upgrades: [...extra, id] }; break; }
         }

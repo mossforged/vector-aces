@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-13 — syndicate content batch
+- 7 ships (Adder, Gnat, Raptor, Bloodhound, Warden, Hopper, Gharial), 55 pilots (incl. Hammerhead pilots), 71 upgrades (crew, illicit, salvaged drones, modifications, Syndicate titles), 2 conditions; original art and 4 presets.
+- Engine: hull bonuses (`stat` 'hull'), `onDestroyed` / `anyDestroyed` / `anyDamaged` / `anyActivate` / `onLocked` / `afterDecloak` hooks, `takeFaceup` / `dealFaceup`, `ignoreBomb`, `bombRoll`, `longDrop`, front bomb drops, `deploySkill`. Upgrade data: `grantsOneOf`, `discount: { slot: '*' }`, `shieldValue`, `needsAction`, `needsSlots`, `requiresUpgrade`.
+
 ## 2026-10-13 — dominion content batch
 - 10 ships (Specter, Maul, Vespid, Stiletto, Gadfly, Harrier, Scorpion, Starling, Nightjar, Reaver), 66 pilots, 70 upgrades (elite, system, tech, Dominion crew, titles/mods), 5 conditions; original art and 3 presets.
 - Engine: attacker-modifies-defense-dice stage (`atkOnDefense`); `afterRollForced` now called on every ship's cards; fold hooks `denyTokens`, `blockMods`, `lockCostWaived`; watch hooks `combatActive`, `anySpendFocus`; flags `stressedAction`, `delayStress`, `phaseRocks`, `launchBombs`; `decloakPositions` and `afterDrop`; weapon `noAttackMods`. Upgrade data: `removes`, `discount`, `maxHull`, `maxAgility` (`entryPoints()` prices a ship with discounts).

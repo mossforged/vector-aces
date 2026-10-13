@@ -3,8 +3,8 @@ import { DAMAGE_CARDS } from '../data/damageDeck.js';
 import { UPGRADES } from '../data/upgrades.js';
 import { shuffle } from './rng.js';
 import { rollFace } from './dice.js';
-import { log, emit } from './flow.js';
-import { cardsOf, flag } from './hooks.js';
+import { log, emit, push } from './flow.js';
+import { cardsOf, flag, fold, everyone } from './hooks.js';
 import { addStress } from './effects.js';
 import { chassis, hullDamage, shipName, shipList, effectiveSkill } from './queries.js';
 
@@ -28,6 +28,7 @@ function drawCard(state) {
  */
 export function sufferDamage(state, ship, hits, crits = 0, opts = {}) {
   const seq = [...Array(hits).fill(false), ...Array(crits).fill(true)];
+  if (seq.length && !ship.destroyed && !(state.attack && state.attack.defender === ship.id)) push(state, ...everyone(state, 'anyDamaged', ship));
   for (const crit of seq) {
     if (ship.destroyed) return;
     if (ship.shields > 0) {
@@ -53,7 +54,8 @@ function dealCard(state, ship, crit, opts) {
     ship.damage.push({ card: 'direct_hit', faceup: false, round: state.round, proxy: true, uid: state.uid++ });
     return;
   }
-  const faceup = crit && !deckEmpty;
+  // takeFaceup (receiving ship) / dealFaceup (attacker): this card is dealt faceup even if it isn't a critical.
+  const faceup = !deckEmpty && (crit || flag(state, ship, 'takeFaceup', opts) || (!!opts.attacker && flag(state, opts.attacker, 'dealFaceup', ship)));
   if (faceup && opts.attacker && flag(state, opts.attacker, 'faceupDrawThree')) {
     const drawn = [card, drawCard(state), drawCard(state)].filter(Boolean);
     drawn.sort((x, y) => SEVERITY.indexOf(x) - SEVERITY.indexOf(y));
@@ -121,7 +123,7 @@ export function flipFacedown(state, ship, cardId) {
 
 export function checkDestroyed(state, ship) {
   if (ship.destroyed || ship.pendingDestroy || ship.delayedDestroy) return;
-  if (hullDamage(ship) < chassis(ship).hull) return;
+  if (hullDamage(ship) < fold(state, ship, 'stat', chassis(ship).hull, 'hull')) return;
   if (flag(state, ship, 'delayDestruction')) {
     ship.delayedDestroy = true;
     log(state, `${shipName(ship)} is wrecked but fights on until the end of combat!`);
@@ -137,6 +139,7 @@ export function checkDestroyed(state, ship) {
 
 export function destroyShip(state, ship, reason = 'destroyed') {
   if (ship.destroyed) return;
+  const own = []; for (const c of cardsOf(ship)) if (c.onDestroyed) own.push(...(c.onDestroyed(state, ship) || []));
   ship.destroyed = true; ship.pendingDestroy = false; ship.delayedDestroy = false;
   if (reason === 'fled') ship.fled = true;
   for (const s of shipList(state)) if (s.lockOn === ship.id) s.lockOn = null;
@@ -147,6 +150,7 @@ export function destroyShip(state, ship, reason = 'destroyed') {
   emit(state, { type: 'destroyed', ship: ship.id, reason });
   log(state, `${shipName(ship)} ${reason === 'fled' ? 'flew off the battlefield and is lost' : 'is destroyed'}!`);
   checkVictory(state);
+  if (!state.winner) push(state, ...own, ...everyone(state, 'anyDestroyed', ship));
 }
 
 export function resolvePendingDestroys(state) {

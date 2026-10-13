@@ -109,7 +109,7 @@ export const steps = {
       push(state, { t: 'move', ship: ship.id, key: '1S', color: 'w', ion: true });
       return;
     }
-    push(state, ...ownSteps(state, ship, 'beforeReveal'), { t: 'reveal', ship: ship.id });
+    push(state, ...everyone(state, 'anyActivate', ship), ...ownSteps(state, ship, 'beforeReveal'), { t: 'reveal', ship: ship.id });
   },
 
   reveal(state, s) {
@@ -126,7 +126,7 @@ export const steps = {
     const ship = state.ships[s.ship];
     if (ship.destroyed) return;
     const mv = ship.round.maneuver;
-    if (ship.stress > 0 && mv.color === 'r' && !flag(state, ship, 'redWhileStressed')) {
+    if (ship.stress > 0 && mv.color === 'r' && !ship.round.redOk && !flag(state, ship, 'redWhileStressed')) {
       const opp = enemyOf(state, ship.owner);
       const opts = dialFor(ship.chassis).filter(x => maneuverColor(state, ship, x) !== 'r')
         .map(x => ({ id: x.key, label: x.key, maneuver: { ...x, color: maneuverColor(state, ship, x) } }));
@@ -242,6 +242,7 @@ export const choices = {
     emit(state, { type: 'decloak', ship: ship.id });
     log(state, `${shipName(ship)} decloaks!`);
     checkMines(state, ship, o.template ? [o.template] : []);
+    push(state, ...ownSteps(state, ship, 'afterDecloak'));
   },
   overrideManeuver(state, data, choice) {
     const ship = state.ships[data.ship];

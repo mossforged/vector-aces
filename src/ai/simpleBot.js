@@ -85,6 +85,7 @@ export async function randomSquad(faction, rng = Math.random, limit = 100) {
         if (u.removes) e.upgrades = e.upgrades.filter(x => !u.removes.includes(UPGRADES[x].slot)); // e.g. a title that strips slots
         e.upgrades.push(u.id);
         free.push(...(u.grants || [])); // slots granted by this upgrade get filled too
+        if (u.grantsOneOf) free.push(pickOne(u.grantsOneOf));
       }
       squad.push(e);
       if (validateSquad(faction, squad, limit).length) { squad.pop(); if (squadPoints(squad) > limit - 12) break; }
