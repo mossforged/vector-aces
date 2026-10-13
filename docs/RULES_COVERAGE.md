@@ -75,7 +75,7 @@ Head Wound (no pilot ability / elite upgrades).
   cannons, turrets, crew, systems, modifications, one title — all implemented.
 - ◐ Simplified card choices: Commander Ostrava auto-deals the worst of 3 cards; Baron Kessick and
   Loyal Mechanic trigger automatically (always beneficial); Snap Roll removes the first enemy lock.
-- ✅ Every first-edition small ship is in (batches below). ⬜ Not yet: large/huge ships, true two-lock crew.
+- ✅ Every first-edition small and large ship is in (batches below). ⬜ Not yet: huge (epic) ships, true two-lock crew.
 
 ## Content batch: league (7 ships, 47 pilots, 68 upgrades, 2 conditions)
 - Ships: Pavise, Saber, Skiff, Longbow, Ironwood, Hammerhead (chassis shared with the Syndicate), Tern; new League pilots for Lancer, Dart, Halberd and the Wasp.
@@ -90,7 +90,7 @@ Head Wound (no pilot ability / elite upgrades).
 - ◐ Field Refit: the second Modification slot works; the Elite cost discount is not applied; Spare Munitions restores a discarded card at the next opportunity (after the attack / maneuver / action).
 - ◐ Heckler Drone cannot lock friendly ships.
 - ◐ Casso Andrel guesses at the start of the Activation phase (after both dials are locked) instead of the end of Planning.
-- Skipped: the two docking titles for the Skiff and Tern (they need a large carrier ship that isn't in the game).
+- The Skiff and Tern docking titles arrived with the large batch (Lifeboat / Lifeboat II).
 
 ## Content batch: dominion (10 ships, 66 pilots, 70 upgrades, 5 conditions)
 - Ships: Specter, Maul, Vespid, Stiletto, Gadfly, Harrier, Scorpion, Starling, Nightjar, Reaver; new Dominion pilots for Wasp, Hornet, Talon, Beetle and Mantis.
@@ -112,10 +112,20 @@ Head Wound (no pilot ability / elite upgrades).
 - ◐ Captain Jostar reacts to damage suffered outside attacks (bombs, asteroids, splash). Bosh's “adjacent” maneuvers are the neighbours on the dial list.
 - ◐ Sol Sixa slides a dropped token to the rear-left/right; Constable Zuvo drops ahead with a 1-straight; Bomb Chief uses a 2-straight drop.
 - ◐ Pace Droid always deploys at skill 8. Tweek's “start of the game” choice happens at the start of round 1's Activation (Mimicked doesn't copy card actions).
-- Skipped: Nashtah Pup Pilot and the IG-2000 crew card (they need a large ship), and the Energy crew card (huge ships only).
+- The two cards that needed a large ship (reserve pilot, Hunter Link crew) are now in the large batch; the Energy crew card is skipped (huge ships only).
 
 ## Not yet
 - ⬜ Missions (escort, asteroid run, satellites) — see WORKSTREAMS.md
 - ⬜ Team play (3–4 players)
 - ✅ Computer opponent (lobby: *Vs computer*, *Watch AI battle*) — ◐ a simple heuristic bot
 - ⬜ Measuring tools in the UI (range ruler drag), undo, replay viewer
+
+## Content batch: large (13 ships, 65 pilots, 31 upgrades, 1 condition)
+- Ships: Hauler, Drifter, Hearth, Pelican, Thunderhead (League); Lantern, Heron, Bastille, Raven (Dominion; Lantern also Syndicate); Mandible, Hulk, Leaper, Prowler (Syndicate).
+- ✅ Large bases (80 mm): maneuvers, barrel rolls, boosts, bomb drops, deployment, rendering. Large ships can't be dragged by tractor beams.
+- ✅ Mobile arc + Rotate Arc action; docking with launch from the rear guides; reserve fighter; shared pilot abilities; ships that obstruct.
+- ◐ Docked ships launch with a white/green straight, bank or turn from the carrier's rear (facing away); an emergency launch deals 1 facedown Damage card.
+- ◐ “Start of the game” placements (Jax Solent, Lieutenant Dorman) happen at the start of round 1's Activation from a few fixed spots.
+- ◐ Brosk trades a critical for 2 hits while modifying attack dice (not at compare). Moraly Evan's cannons fire in any direction. Kaen Jarro spends focus automatically when a wingmate is attacked.
+- ◐ Emin Azzar, Sol Sixa and “Scarlet Specialist” move dropped tokens to fixed alternative spots. Hidden Hold's 3-point limit on the extra Modification isn't enforced.
+- ◐ Cargo clouds act like a mine that stays on the table (stress + 1 attack die; a critical deals critical damage).

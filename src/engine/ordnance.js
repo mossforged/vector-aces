@@ -3,6 +3,7 @@
 //   checkMines(state, ship, polys)   – after any repositioning; detonates mines the ship touched
 //   step 'detonateBombs'             – end of the Activation phase: every bomb goes off
 import { ORDNANCE } from '../data/ordnance.js';
+import { SHIPS } from '../data/ships.js';
 import { CONFIG } from '../data/config.js';
 import { push, log, emit } from './flow.js';
 import { add, mul, fwd, right, polygonsIntersect, closestPoints, bandFor } from './geometry.js';
@@ -30,7 +31,7 @@ const depth = def => (def.shape.type === 'circle' ? def.shape.r * 2 : def.shape.
 /** Drop one ordnance card's token(s) behind the ship. */
 export function dropOrdnance(state, ship, type, { front = false } = {}) {
   const def = ORDNANCE[type];
-  const half = CONFIG.baseSize.small / 2;
+  const half = CONFIG.baseSize[SHIPS[ship.chassis].size] / 2;
   // Timed bombs can be launched ahead along a 5-straight template by some cards; mines are always dropped.
   const launch = def.kind === 'bomb' && flag(state, ship, 'launchBombs');
   const len = (flag(state, ship, 'longDrop') ? 2 : 1) * CONFIG.straightPerSpeed; // longDrop: 2-straight template
@@ -66,6 +67,12 @@ const EFFECTS = {
   bomblet: (state, s, tok) => rollAndSuffer(state, s, 2, 'Bomblet', tok),
   prox_mine: (state, s, tok) => rollAndSuffer(state, s, 3, 'Proximity mine', tok),
   snare_net: (state, s) => { sufferDamage(state, s, 1, 0); if (!s.destroyed) { s.ion = (s.ion || 0) + 2; s.round.skipAction = true; log(state, `${shipName(s)} is tangled in a snare net.`); } },
+  cargo: (state, s) => {
+    addStress(state, s);
+    const f = rollDice(state, 'attack', 1)[0].face;
+    emit(state, { type: 'roll', ship: s.id, faces: [f], reason: 'Cargo cloud' });
+    if (f === 'crit') sufferDamage(state, s, 0, 1);
+  },
   cluster_mine: (state, s) => {
     const faces = rollDice(state, 'attack', 2).map(d => d.face);
     emit(state, { type: 'roll', ship: s.id, faces, reason: 'Cluster mine' });
@@ -76,7 +83,7 @@ const EFFECTS = {
 function detonate(state, tok, victims) {
   const def = ORDNANCE[tok.type];
   everyone(state, 'onDetonate', tok, victims); // side effects only (e.g. extra damage nearby)
-  removeToken(state, tok);
+  if (!def.persist) removeToken(state, tok);
   emit(state, { type: 'detonate', ordnance: tok.type, x: tok.x, y: tok.y, kind: def.kind });
   log(state, `${def.name} detonates${victims.length ? '' : ' harmlessly'}!`);
   for (const s of victims) if (!s.destroyed && !flag(state, s, 'ignoreBomb', tok)) EFFECTS[tok.type](state, s, tok);

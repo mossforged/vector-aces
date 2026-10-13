@@ -8,9 +8,10 @@ import ordnance from './ordnance.js';
 import dominion from './dominion.js';
 import league from './league.js';
 import syndicate from './syndicate.js';
+import large from './large.js';
 import { STEPS } from '../flow.js';
 
-export const CARDS = { ...pilots, ...elite, ...gear, ...weapons, ...ordnance, ...dominion, ...league, ...syndicate };
+export const CARDS = { ...pilots, ...elite, ...gear, ...weapons, ...ordnance, ...dominion, ...league, ...syndicate, ...large };
 
 for (const [id, def] of Object.entries(CARDS)) {
   def.id = id;

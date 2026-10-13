@@ -1,7 +1,7 @@
 // Shared building blocks for rules modules and cards: token changes that trigger
 // card events, and ready-made dice-option builders.
 import { push, log, emit } from './flow.js';
-import { ownSteps, flag, everyone } from './hooks.js';
+import { ownSteps, flag, everyone, foldAll } from './hooks.js';
 import { shipName } from './queries.js';
 import { rollFace } from './dice.js';
 
@@ -10,7 +10,7 @@ import { rollFace } from './dice.js';
 export function addStress(state, ship, n = 1) {
   for (let i = 0; i < n; i++) {
     ship.stress++;
-    push(state, ...ownSteps(state, ship, 'onStress'));
+    push(state, ...ownSteps(state, ship, 'onStress'), ...everyone(state, 'anyStress', ship));
   }
 }
 
@@ -62,7 +62,8 @@ export const once = (a, key) => !a.used.includes(key);
 export const mark = (a, key) => a.used.push(key);
 
 /** True if the attacker is still allowed to reroll attack dice (some defenders forbid it). */
-export const attackRerollAllowed = (state, a) => !flag(state, defender(state, a), 'forbidAttackRerolls', a);
+export const attackRerollAllowed = (state, a) => !flag(state, defender(state, a), 'forbidAttackRerolls', a)
+  && !(a.attackDice.some(d => d.rerolled) && foldAll(state, 'rerollCap', false, a)); // "may not reroll more than 1 die"
 export const attackFocusAllowed = (state, a) => !flag(state, defender(state, a), 'forbidAttackRerolls', a);
 
 /** Reroll up to n dice whose faces are in `faces` (skipping dice already rerolled or locked). */

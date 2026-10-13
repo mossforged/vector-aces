@@ -213,14 +213,14 @@ export class BoardView {
 
   _shipAtScreen(p) {
     if (!this.state) return null;
-    const cam = this.camera, r = 24 * cam.scale;
+    const cam = this.camera;
     let best = null, bestDepth = -Infinity;
     const ground = cam.unproject(p.x, p.y);
     for (const s of Q.liveShips(this.state)) {
       const pose = this._pose(s);
       const top = cam.project(pose.x, pose.y, FLY);
-      const onModel = Math.hypot(p.x - top.x, p.y - top.y) < r;
-      const onBase = G.pointInPolygon(ground, G.basePolygon(pose, 'small'));
+      const onModel = Math.hypot(p.x - top.x, p.y - top.y) < 24 * cam.scale * sizeK(s);
+      const onBase = G.pointInPolygon(ground, G.basePolygon(pose, Q.chassis(s).size));
       if (!onModel && !onBase) continue;
       const depth = cam.project(pose.x, pose.y).y;
       if (depth > bestDepth) { best = s; bestDepth = depth; }
@@ -271,7 +271,7 @@ export class BoardView {
     const arcShips = new Set([this.selected, this.hover, ...(hl.ships || [])].filter(Boolean));
     for (const s of Q.liveShips(st)) if (arcShips.has(s.id)) drawArc(ctx, this._pose(s, now), st.players[s.owner].arcColor, s);
     if (hl.template) { pathPoly(ctx, hl.template); ctx.fillStyle = 'rgba(255,255,255,0.16)'; ctx.fill(); }
-    for (const pose of hl.poses || []) drawBaseOutline(ctx, pose, 'rgba(255,255,255,0.8)', true);
+    for (const pose of hl.poses || []) drawBaseOutline(ctx, pose, 'rgba(255,255,255,0.8)', true, hl.size || (hl.ships?.[0] && Q.chassis(st.ships[hl.ships[0]]).size));
     if (hl.line) drawRangeLine(ctx, hl.line.a, hl.line.b);
 
     drawOrdnance(ctx, st, now);
@@ -456,7 +456,7 @@ function drawRock(ctx, cam, poly, h) {
 }
 
 function drawArc(ctx, pose, color, ship) {
-  const arcs = ship ? (Q.chassis(ship).arcs || ['front']) : ['front'];
+  const arcs = ship ? Q.arcsOf(ship) : ['front'];
   const wedge = (h, half) => {
     const a0 = h - half - Math.PI / 2, a1 = h + half - Math.PI / 2;
     for (let band = 3; band >= 1; band--) {
@@ -472,6 +472,7 @@ function drawArc(ctx, pose, color, ship) {
   else {
     if (arcs.includes('front180')) wedge(pose.h, Math.PI / 2); else wedge(pose.h, A);
     if (arcs.includes('rear')) wedge(pose.h + Math.PI, A);
+    if (arcs.includes('mobile')) wedge(pose.h + Q.MOBILE_OFFSET[ship.mobileArc || 'front'], A);
   }
   if (arcs.includes('bullseye')) {
     const far = G.bullseyePolygon(pose);
@@ -512,14 +513,17 @@ function drawRangeLine(ctx, a, b) {
   }
 }
 
-function drawBaseOutline(ctx, pose, color, dashed) {
-  pathPoly(ctx, G.basePolygon(pose, 'small'));
+/** 1 for small bases, 2 for large: scales models, shadows and hit areas. */
+const sizeK = s => CONFIG.baseSize[Q.chassis(s).size] / CONFIG.baseSize.small;
+
+function drawBaseOutline(ctx, pose, color, dashed, size = 'small') {
+  pathPoly(ctx, G.basePolygon(pose, size || 'small'));
   if (dashed) ctx.setLineDash([5, 5]);
   ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]);
 }
 
 function drawBase(ctx, s, pose, { selected, hot, color }) {
-  const fac = { color: color || '#888888' }, half = CONFIG.baseSize.small / 2;
+  const fac = { color: color || '#888888' }, half = CONFIG.baseSize[Q.chassis(s).size] / 2, k = sizeK(s);
   ctx.save();
   ctx.translate(pose.x, pose.y); ctx.rotate(pose.h);
   ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(-half + 3, -half + 3, half * 2, half * 2);
@@ -532,7 +536,7 @@ function drawBase(ctx, s, pose, { selected, hot, color }) {
   ctx.lineWidth = selected || hot ? 2.6 : 1.5;
   ctx.strokeRect(-half, -half, half * 2, half * 2);
   // ship shadow
-  ctx.fillStyle = 'rgba(0,0,0,0.38)'; ctx.beginPath(); ctx.ellipse(4, 4, 13, 15, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.38)'; ctx.beginPath(); ctx.ellipse(4 * k, 4 * k, 13 * k, 15 * k, 0, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
 
@@ -547,7 +551,7 @@ function drawModel(ctx, cam, s, pose, { selected, hot, sink = 0, color } = {}) {
   const fac = { color: color || '#888888' };
   for (const [dl, alpha] of [[-1.6, 0.55], [0, 1]]) {
     ctx.setTransform(...cam.matrix(lift + dl));
-    ctx.translate(pose.x, pose.y); ctx.rotate(pose.h); ctx.scale(1.5, 1.5);
+    ctx.translate(pose.x, pose.y); ctx.rotate(pose.h); ctx.scale(1.5 * sizeK(s), 1.5 * sizeK(s));
     if (dl < 0) { ctx.globalCompositeOperation = 'source-over'; ctx.filter = 'brightness(0.35)'; }
     const ga = ctx.globalAlpha; ctx.globalAlpha = ga * alpha;
     drawShipArt(ctx, Q.chassis(s).art, fac.color);
@@ -556,7 +560,7 @@ function drawModel(ctx, cam, s, pose, { selected, hot, sink = 0, color } = {}) {
   if (selected || hot) {
     ctx.setTransform(...cam.matrix(lift));
     ctx.strokeStyle = selected ? 'rgba(255,255,255,0.8)' : 'rgba(255,226,122,0.75)'; ctx.lineWidth = 1.6;
-    ctx.beginPath(); ctx.arc(pose.x, pose.y, 30, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(pose.x, pose.y, 30 * sizeK(s), 0, Math.PI * 2); ctx.stroke();
   }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 }

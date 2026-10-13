@@ -3,9 +3,10 @@ import * as base from './base.js';
 import * as dominion from './dominion.js';
 import * as league from './league.js';
 import * as syndicate from './syndicate.js';
+import * as large from './large.js';
 import { DAMAGE_ORIGINALS, SLOT_ORIGINALS } from './originals-static.js';
 
-const batches = [base, dominion, league, syndicate];
+const batches = [base, dominion, league, syndicate, large];
 const merge = key => Object.assign({}, ...batches.map(b => b[key]));
 
 export const GEN_SHIPS = merge('SHIPS');

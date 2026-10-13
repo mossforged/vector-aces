@@ -57,7 +57,40 @@ export function cardLink(id) {
   const path = O.images?.[id];
   if (!path) return '';
   const href = IMG_BASE + path.split('/').map(encodeURIComponent).join('/');
-  return `<a class="orig-link" href="${href}" target="_blank" rel="noopener" title="Open the original card in a new tab" data-noswap="1">card ↗</a>`;
+  return `<a class="orig-link" href="${href}" target="_blank" rel="noopener" data-card="${id}" data-noswap="1">card ↗</a>`;
+}
+
+// ---------------- hover preview for card links (for testing) ----------------
+// Hovering a "card ↗" link shows our card (name, cost, text) next to the original card image.
+// The image is loaded from the dataset repo; where the host blocks it, the popup says so.
+const RAW_BASE = 'https://raw.githubusercontent.com/guidokessels/xwing-data/master/images/';
+let pop = null;
+function cardInfo(id) {
+  const p = PILOTS[id], u = UPGRADES[id], c = CONDITIONS[id];
+  if (p) return { name: p.name, sub: `${SHIPS[p.ship]?.name || ''} · pilot skill ${p.skill} · ${p.cost} pts`, text: p.text || 'No pilot ability.' };
+  if (u) return { name: u.name, sub: `${SLOT_LABELS[u.slot] || u.slot} · ${u.cost} pts${u.weapon ? ` · attack ${u.weapon.attack ?? '–'}, range ${u.weapon.minRange}–${u.weapon.maxRange}` : ''}`, text: u.text || '' };
+  if (c) return { name: c.name, sub: 'Condition', text: c.text || '' };
+  return null;
+}
+const escHtml = t => String(t ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+function showPop(a) {
+  const id = a.dataset.card, info = cardInfo(id), path = O.images?.[id];
+  if (!info && !path) return;
+  pop ||= Object.assign(document.createElement('div'), { className: 'card-pop' });
+  pop.dataset.noswap = '1';
+  pop.innerHTML = `${info ? `<div class="cp-ours"><b>${escHtml(info.name)}</b><small>${escHtml(info.sub)}</small><p>${escHtml(info.text)}</p></div>` : ''}
+    ${path ? `<div class="cp-orig"><img alt="" src="${RAW_BASE + path.split('/').map(encodeURIComponent).join('/')}"><small class="cp-blocked" hidden>Original image can't load here — click the link to open it.</small></div>` : ''}`;
+  const img = pop.querySelector('img');
+  if (img) img.onerror = () => { img.hidden = true; pop.querySelector('.cp-blocked').hidden = false; };
+  document.body.appendChild(pop);
+  const r = a.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
+  const left = Math.min(window.innerWidth - w - 8, Math.max(8, r.left));
+  const top = r.bottom + h + 8 < window.innerHeight ? r.bottom + 6 : Math.max(8, r.top - h - 6);
+  pop.style.left = `${left}px`; pop.style.top = `${top}px`;
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('mouseover', e => { const a = e.target.closest?.('.orig-link[data-card]'); if (a) showPop(a); });
+  document.addEventListener('mouseout', e => { if (e.target.closest?.('.orig-link[data-card]') && pop) pop.remove(); });
 }
 const syncRootClass = () => document.documentElement.classList.toggle('show-original', original);
 syncRootClass();

@@ -14,8 +14,8 @@ const ARC = { B: 45 * DEG, T: 90 * DEG };
 //   TRL/TRR Tallon roll: turn, then a further 90° in the turn's direction
 //   RBL/RS/RBR reverse maneuvers: the template runs backwards from the rear edge
 //   ST  stationary (speed 0): the ship stays put
-export const GEOMETRY = { S: 'S', K: 'S', BL: 'BL', BR: 'BR', TL: 'TL', TR: 'TR', SL: 'BL', SR: 'BR', TRL: 'TL', TRR: 'TR', RS: 'S', RBL: 'BR', RBR: 'BL', ST: 'ST' };
-const END_ROTATION = { K: Math.PI, SL: Math.PI, SR: Math.PI, TRL: -Math.PI / 2, TRR: Math.PI / 2 };
+export const GEOMETRY = { S: 'S', K: 'S', BL: 'BL', BR: 'BR', TL: 'TL', TR: 'TR', SL: 'BL', SR: 'BR', TRL: 'TL', TRR: 'TR', RS: 'S', RBL: 'BR', RBR: 'BL', ST: 'ST', SLT: 'TL', SRT: 'TR' };
+const END_ROTATION = { K: Math.PI, SL: Math.PI, SR: Math.PI, SLT: Math.PI, SRT: Math.PI, TRL: -Math.PI / 2, TRR: Math.PI / 2 };
 export const isReverse = b => b === 'RS' || b === 'RBL' || b === 'RBR';
 
 export function templateLength(m) {

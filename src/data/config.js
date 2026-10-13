@@ -3,7 +3,7 @@
 
 export const CONFIG = {
   playArea: 914,               // 3' x 3'
-  baseSize: { small: 40 },     // square base side
+  baseSize: { small: 40, large: 80 }, // square base side
   rangeBand: 100,              // each section of the range ruler
   maxRange: 3,
   arcHalfAngle: 40,            // primary firing arc = 80°

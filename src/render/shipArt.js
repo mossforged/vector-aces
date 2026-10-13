@@ -44,6 +44,7 @@ function stripe(ctx, segs, accent, w = 1.5) {
 import dominionArt from './art/dominion.js';
 import leagueArt from './art/league.js';
 import syndicateArt from './art/syndicate.js';
+import largeArt from './art/large.js';
 
 export const helpers = { poly, both, mirror, canopy, engine, stripe, hull, hullDark, line, stroke };
 
@@ -188,7 +189,7 @@ const ART = {
     ctx.fillStyle = '#ff5c5c'; ctx.beginPath(); ctx.arc(-1.3, -13, 0.9, 0, Math.PI * 2); ctx.arc(1.3, -13, 0.9, 0, Math.PI * 2); ctx.fill();
   },
 
-  ...dominionArt, ...leagueArt, ...syndicateArt,
+  ...dominionArt, ...leagueArt, ...syndicateArt, ...largeArt,
 
   generic(ctx, accent) {
     ctx.beginPath(); ctx.moveTo(0, -15); ctx.lineTo(12, 12); ctx.lineTo(0, 6); ctx.lineTo(-12, 12); ctx.closePath();

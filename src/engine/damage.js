@@ -29,8 +29,9 @@ function drawCard(state) {
 export function sufferDamage(state, ship, hits, crits = 0, opts = {}) {
   const seq = [...Array(hits).fill(false), ...Array(crits).fill(true)];
   if (seq.length && !ship.destroyed && !(state.attack && state.attack.defender === ship.id)) push(state, ...everyone(state, 'anyDamaged', ship));
+  ship.cancelHits = false;
   for (const crit of seq) {
-    if (ship.destroyed) return;
+    if (ship.destroyed || ship.cancelHits) return;
     if (ship.shields > 0) {
       ship.shields--;
       emit(state, { type: 'shield', ship: ship.id });
@@ -124,6 +125,7 @@ export function flipFacedown(state, ship, cardId) {
 export function checkDestroyed(state, ship) {
   if (ship.destroyed || ship.pendingDestroy || ship.delayedDestroy) return;
   if (hullDamage(ship) < fold(state, ship, 'stat', chassis(ship).hull, 'hull')) return;
+  if (flag(state, ship, 'preventDestroy')) { ship.cancelHits = true; return; } // card handled it (and its own side effects)
   if (flag(state, ship, 'delayDestruction')) {
     ship.delayedDestroy = true;
     log(state, `${shipName(ship)} is wrecked but fights on until the end of combat!`);
@@ -159,7 +161,7 @@ export function resolvePendingDestroys(state) {
 
 export function checkVictory(state) {
   if (state.winner || state.phase === 'setup' || state.phase === 'deploy' || state.phase === 'obstacles') return;
-  const alive = p => shipList(state).some(s => s.owner === p && !s.destroyed);
+  const alive = p => shipList(state).some(s => s.owner === p && !s.destroyed && !(s.reserve && !s.deployed));
   const [a, b] = state.playerOrder;
   const la = alive(a), lb = alive(b);
   if (la && lb) return;

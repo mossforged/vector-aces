@@ -26,8 +26,9 @@ export function chooseDials(state, player, rng = Math.random) {
     const scored = SHIPS[s.chassis].dial.map(c => {
       const [key, color] = c.split(':');
       const m = { key, speed: parseInt(key, 10), bearing: key.replace(/^\d/, '') };
-      const path = buildPath(s.pose, m, 'small');
-      const f = path.final, poly = G.basePolygon(f, 'small');
+      const size = SHIPS[s.chassis].size;
+      const path = buildPath(s.pose, m, size);
+      const f = path.final, poly = G.basePolygon(f, size);
       if (!G.polygonInsideBoard(poly) || G.distanceToEdge(poly) <= 15) return null;
       let score = rand(rng) * 60;
       const d = foes.length ? Math.min(...foes.map(e => Math.hypot(e.pose.x - f.x, e.pose.y - f.y))) : 0;
@@ -69,7 +70,7 @@ export async function randomSquad(faction, rng = Math.random, limit = 100) {
   const { PILOTS } = await import('../data/pilots.js');
   const { UPGRADES } = await import('../data/upgrades.js');
   const { validateSquad, upgradeAllowed, squadPoints, slotsFor } = await import('../engine/index.js');
-  const pilots = Object.values(PILOTS).filter(p => p.faction === faction);
+  const pilots = Object.values(PILOTS).filter(p => p.faction === faction && !p.hidden);
   const pickOne = arr => arr[Math.floor(rng() * arr.length)];
   for (let tries = 0; tries < 200; tries++) {
     const squad = [];

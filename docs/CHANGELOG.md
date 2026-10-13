@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-13 — v0.7 large ships + card previews
+- New "large" batch: 13 large ships (80 mm bases) for all three factions — Hauler, Lantern, Heron, Drifter, Bastille, Mandible, Hulk, Hearth, Leaper, Prowler, Raven, Pelican, Thunderhead — with 65 pilots, 31 upgrades (large-only mods, systems, illicit, titles) and the “Shaken” condition; original art and 5 presets.
+- Mechanics: large bases everywhere (moves, rolls, bomb drops, rendering, bot), the Prowler's rotating mobile arc (Rotate Arc action), docking (Mothership + Lifeboat: launch from the carrier's rear, rear arc while docked, emergency launch), reserve ships (Hound's Lair's Pup Pilot, hidden from the squad builder), shared pilot abilities (Hunter Network), ship obstruction (Screen Jammer), Segnor's loop on a turn template, a persistent cargo cloud token. New hooks: `arcs`, `anyLockTargets`, `anyStress`, `rerollCap`, `preventDestroy`, flags `noPrimary`, `obstructs`, `friendReach`.
+- Hovering a “card ↗” link (original-names toggle on) pops up the card: our name, cost and text beside the original card image.
+
 ## 2026-10-13 — v0.6 every first-edition small ship
 - All three content batches are in: 24 new ships (36 in total), 168 new pilots, 209 new upgrades and 9 condition cards across the League, Dominion and Syndicate (details below).
 - Shared engine work for them: slot-granting / slot-removing / discounting upgrades, an attacker-modifies-defense-dice step, many new card hooks (see `engine/hooks.js`), on-destroyed effects, hull bonuses.

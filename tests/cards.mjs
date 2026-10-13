@@ -37,7 +37,8 @@ export async function runCardSim(games = 600, { quiet = false } = {}) {
     if (!host) {
       for (const p of Object.values(PILOTS)) {
         const pre = Object.values(UPGRADES).filter(u => (u.grants || u.grantsOneOf) && upgradeAllowed(p.id, u.id) && [...(u.grants || []), ...(u.grantsOneOf || [])].includes(UPGRADES[id].slot));
-        for (const extra of [[], ...pre.map(u => [u.id])]) {
+        const need = UPGRADES[id].requiresUpgrade ? [UPGRADES[id].requiresUpgrade] : [];
+        for (const extra of [need, ...pre.map(u => [u.id, ...need])]) {
           if (upgradeAllowed(p.id, id, extra) && !validateSquad(p.faction, [{ pilot: p.id, upgrades: [...extra, id] }]).length) { host = { pilot: p.id, upgrades: [...extra, id] }; break; }
         }
         if (host) break;

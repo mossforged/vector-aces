@@ -19,7 +19,7 @@ import {
 
 export const ACTION_LABELS = {
   focus: 'Focus', evade: 'Evade', lock: 'Target lock', roll: 'Barrel roll', boost: 'Boost', pass: 'Pass',
-  slam: 'SLAM (second maneuver)', cloak: 'Cloak', reload: 'Reload', jam: 'Jam', coordinate: 'Coordinate', reinforce: 'Reinforce',
+  slam: 'SLAM (second maneuver)', cloak: 'Cloak', reload: 'Reload', jam: 'Jam', coordinate: 'Coordinate', reinforce: 'Reinforce', rotate: 'Rotate arc',
 };
 
 /** Weapon upgrades a Reload action could restore. */
@@ -32,7 +32,8 @@ function slamOptions(state, ship) {
 }
 
 function lockTargets(state, ship) {
-  return fold(state, ship, 'lockTargets', liveShips(state).filter(o => o.owner !== ship.owner && rangeBetween(ship, o).band));
+  const own = fold(state, ship, 'lockTargets', liveShips(state).filter(o => o.owner !== ship.owner && rangeBetween(ship, o).band));
+  return foldAll(state, 'anyLockTargets', own, ship); // other ships' cards (e.g. "must lock onto me")
 }
 
 function clearOf(state, ship, poly, template = null) {
@@ -140,6 +141,10 @@ export function performAction(state, ship, id) {
         options: [{ id: 'fore', label: 'Fore (front half)' }, { id: 'aft', label: 'Aft (rear half)' }], onChoose: 'reinforce', data: { ship: ship.id } });
       break;
     case 'lock': push(state, { t: 'lockPrompt', ship: ship.id }); break;
+    case 'rotate':
+      ask(state, { player: ship.owner, kind: 'pick', ship: ship.id, text: 'Rotate your mobile arc to face…',
+        options: ['front', 'left', 'right', 'rear'].filter(k => k !== (ship.mobileArc || 'front')).map(k => ({ id: k, label: k[0].toUpperCase() + k.slice(1) })), onChoose: 'rotateArc', data: { ship: ship.id } });
+      break;
     case 'roll': {
       const opts = rollPositions(state, ship).map(r => ({ id: r.id, label: `${r.side} · ${r.label}`, pose: r.pose }));
       ask(state, { player: ship.owner, kind: 'rollPosition', ship: ship.id, text: 'Barrel roll where?', options: opts, onChoose: 'rollPosition', data: { ship: ship.id } });
@@ -258,6 +263,7 @@ export const choices = {
     t.jam = Math.max(t.jam || 0, 2);
     log(state, `${shipName(state.ships[data.ship])} jams ${shipName(t)}.`);
   },
+  rotateArc(state, data, choice) { const ship = state.ships[data.ship]; ship.mobileArc = choice; log(state, `${shipName(ship)} swings its mobile arc to the ${choice}.`); },
   coordinate(state, data, choice) { push(state, freeAction(state.ships[choice], 'Coordinate: free action')); },
   reinforce(state, data, choice) {
     const ship = state.ships[data.ship];

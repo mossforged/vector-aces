@@ -71,6 +71,7 @@ export function validateSquad(faction, squad, pointLimit = Infinity) {
     if (!p) { errs.push(`Unknown pilot ${e.pilot}`); continue; }
     const ch = SHIPS[p.ship];
     if (p.faction !== faction) errs.push(`${p.name} is not a ${FACTIONS[faction].short} pilot.`);
+    if (p.hidden) errs.push(`${p.name} can't be bought directly.`);
     const names = [p.unique ? p.name : null, ...(e.upgrades || []).map(u => (UPGRADES[u]?.unique ? UPGRADES[u].name : null))].filter(Boolean);
     for (const n of names) { if (uniques.has(n)) errs.push(`Only one "${n}" allowed.`); uniques.add(n); }
     if ((e.upgrades || []).some(u => !UPGRADES[u])) { errs.push(`Unknown upgrade in ${p.name}'s loadout`); continue; }
@@ -160,6 +161,31 @@ export function createGame(opts) {
     }
   }
 
+  // Docking: a ship whose title says `docksTo: <upgrade>` starts docked on a friendly ship carrying that upgrade.
+  // Reserve ships: an upgrade with `spawns: <pilot>` brings a hidden extra ship that starts off the table.
+  for (const id of state.shipOrder.slice()) {
+    const s = state.ships[id];
+    for (const u of s.upgrades) {
+      const def = UPGRADES[u.id];
+      if (def.docksTo) {
+        const carrier = shipList(state).find(c => c.owner === s.owner && c.id !== s.id && c.upgrades.some(x => x.id === def.docksTo));
+        if (carrier) { s.dockedOn = carrier.id; (carrier.docked ||= []).push(s.id); }
+      }
+      if (def.spawns && PILOTS[def.spawns]) {
+        const rid = `s${++n}`, pd = PILOTS[def.spawns];
+        state.ships[rid] = {
+          id: rid, owner: s.owner, pilot: pd.id, chassis: pd.ship, tag: null, upgrades: [],
+          shields: 0, ion: 0, conditions: [], cloaked: false, jam: 0, tractor: 0, disarmed: false,
+          damage: [], stress: 0, tokens: { focus: 0, evade: 0 }, lockOn: null,
+          pose: null, deployed: false, destroyed: false, pendingDestroy: false, fled: false,
+          round: freshRound(), dockedOn: s.id, reserve: true,
+        };
+        state.shipOrder.push(rid);
+        state.ships[rid].shields = stat(state, state.ships[rid], 'maxShields');
+      }
+    }
+  }
+
   state.damageDeck = shuffle(state, buildDamageDeck());
   log(state, `${state.players[initiative].name} (${FACTIONS[state.players[initiative].faction].short}) has initiative.`);
 
@@ -227,7 +253,7 @@ function autoDeployPose(state, ship) {
 function deployOrder(state) {
   const others = p => (p === state.initiative ? 0 : 1);
   const sk = s => fold(state, s, 'deploySkill', pilot(s).skill);
-  return shipList(state).slice().sort((a, b) =>
+  return shipList(state).filter(s => !s.dockedOn).sort((a, b) =>
     sk(a) - sk(b) || others(a.owner) - others(b.owner) || state.shipOrder.indexOf(a.id) - state.shipOrder.indexOf(b.id));
 }
 

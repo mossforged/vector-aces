@@ -2,6 +2,7 @@
 import dominionPresets from './presets/dominion.js';
 import leaguePresets from './presets/league.js';
 import syndicatePresets from './presets/syndicate.js';
+import largePresets from './presets/large.js';
 
 const BASE = {
   league: {
@@ -51,6 +52,6 @@ const BASE = {
 
 /** Batch presets carry their own `faction`; merged into the base table here. */
 export const PRESET_SQUADS = { league: { ...BASE.league }, dominion: { ...BASE.dominion }, syndicate: {} };
-for (const extra of [dominionPresets, leaguePresets, syndicatePresets]) {
+for (const extra of [dominionPresets, leaguePresets, syndicatePresets, largePresets]) {
   for (const [k, v] of Object.entries(extra)) (PRESET_SQUADS[v.faction] ||= {})[k] = v;
 }

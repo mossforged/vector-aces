@@ -21,8 +21,8 @@ export const DAMAGE_ORIGINALS = {
 
 export const ACTION_MAP = {
   Focus: 'focus', 'Target Lock': 'lock', 'Barrel Roll': 'roll', Evade: 'evade', Boost: 'boost',
-  SLAM: 'slam', Cloak: 'cloak', Reload: 'reload', Jam: 'jam', Coordinate: 'coordinate', Reinforce: 'reinforce',
+  SLAM: 'slam', Cloak: 'cloak', Reload: 'reload', Jam: 'jam', Coordinate: 'coordinate', Reinforce: 'reinforce', 'Rotate Arc': 'rotate',
 };
 
-export const ARC_MAP = { Front: 'front', 'Auxiliary Rear': 'rear', 'Auxiliary 180': 'front180', Turret: 'turret', Bullseye: 'bullseye' };
+export const ARC_MAP = { Front: 'front', 'Auxiliary Rear': 'rear', 'Auxiliary 180': 'front180', Turret: 'turret', Bullseye: 'bullseye', Mobile: 'mobile' };
 

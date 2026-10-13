@@ -23,7 +23,7 @@ Done: **base** (12 ships of waves 1–4, 57 pilots, 67 upgrades incl. all bombs/
 bullseye arcs, SLAM, cloak & decloak, reload, jam, coordinate, reinforce, tractor beams, bombs &
 mines, condition cards, the Syndicate faction, per-pilot factions).
 
-**All three batches are done (v0.6).** The table below is kept as a map of which files hold what; new
+**All three batches are done (v0.6); a fourth batch, `large`, adds every large ship for all factions (v0.7).** The table below is kept as a map of which files hold what; new
 small-ship content (e.g. later printings) goes into the batch that owns its faction.
 
 | Batch | New ships (dataset ship ids) | Pilots | Also owns (faction-neutral upgrades, by slot) |

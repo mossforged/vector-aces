@@ -263,6 +263,12 @@ label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--t
 .orig-link { display: none; font-size: 10.5px; color: var(--accent); text-decoration: none; border: 1px solid #f29a3a55; border-radius: 4px; padding: 0 4px; margin-left: 2px; white-space: nowrap; }
 .orig-link:hover { background: #f29a3a22; }
 .show-original .orig-link { display: inline-block; }
+.card-pop { position: fixed; z-index: 60; display: flex; gap: 10px; align-items: flex-start; max-width: min(560px, calc(100vw - 16px)); padding: 10px; background: #141a24; border: 1px solid #f29a3a66; border-radius: 8px; box-shadow: 0 10px 30px #000a; pointer-events: none; font-size: 12.5px; color: #dfe4ec; }
+.card-pop .cp-ours { width: 200px; display: flex; flex-direction: column; gap: 4px; }
+.card-pop .cp-ours small { color: #9aa6b8; }
+.card-pop .cp-ours p { margin: 4px 0 0; line-height: 1.4; }
+.card-pop .cp-orig img { display: block; max-width: 300px; max-height: 420px; border-radius: 6px; }
+.card-pop .cp-blocked { display: block; width: 160px; color: #9aa6b8; }
 
 /* computer-player controls (top bar) */
 .autobar { display: inline-flex; align-items: center; gap: 2px; margin-right: 6px; }

@@ -92,6 +92,7 @@ export const friendly = (a, b) => a.owner === b.owner;
 
 /** Friendly ships (other than s) within Range lo..hi of s. */
 export function friendsInRange(state, s, lo = 1, hi = 3) {
+  if (lo === 1 && hi < 3 && flag(state, s, 'friendReach')) hi = 3; // "treat friendly ships at Range 2–3 as Range 1"
   return liveShips(state).filter(o => o.id !== s.id && o.owner === s.owner && (b => b && b >= lo && b <= hi)(rangeBetween(s, o).band));
 }
 export function enemiesInRange(state, s, lo = 1, hi = 3) {
@@ -107,7 +108,10 @@ export function rangeBetween(a, b) {
 // ---------------- firing arcs ----------------
 // arcs per chassis: 'front' (primary), 'rear' (auxiliary rear), 'front180' (auxiliary 180°),
 // 'turret' (primary turret: attacks in any direction), 'bullseye' (narrow strip inside the front arc).
-export const arcsOf = s => chassis(s).arcs || ['front'];
+/** Firing arcs of a ship (cards may add some, e.g. a docked shuttle's rear arc). */
+export const arcsOf = s => fold(null, s, 'arcs', (chassis(s).arcs || ['front']).slice());
+/** Mobile arc facing offset (radians) for ships with a rotating arc. */
+export const MOBILE_OFFSET = { front: 0, right: Math.PI / 2, rear: Math.PI, left: -Math.PI / 2 };
 
 /** Polygons for the arcs a ship can fire its primary weapon from. */
 export function arcPolys(s) {
@@ -116,6 +120,7 @@ export function arcPolys(s) {
     if (a === 'front') out.push(['front', arcPolygon(s.pose)]);
     else if (a === 'rear') out.push(['rear', arcPolygon({ ...s.pose, h: s.pose.h + Math.PI })]);
     else if (a === 'front180') out.push(['front180', arcPolygon(s.pose, 90)]);
+    else if (a === 'mobile') out.push(['mobile', arcPolygon({ ...s.pose, h: s.pose.h + MOBILE_OFFSET[s.mobileArc || 'front'] })]);
   }
   return out;
 }
@@ -146,8 +151,14 @@ export function attackGeometry(state, a, b) {
   }
   if (!best) return null;
   const { cp, arc } = best;
-  const obstructed = cp.d > 0 && obstaclePolys(state).some(o => segmentHitsPolygon(cp.a, cp.b, o));
+  const obstructed = cp.d > 0 && blocksLine(state, a, b, cp);
   return { d: cp.d, band: bandFor(cp.d), obstructed, touching: areTouching(state, a.id, b.id), line: { a: cp.a, b: cp.b }, arc };
+}
+
+/** Asteroids, and ships whose cards let them obstruct (e.g. a jammer), block the line of fire. */
+function blocksLine(state, a, b, cp) {
+  if (obstaclePolys(state).some(o => segmentHitsPolygon(cp.a, cp.b, o))) return true;
+  return liveShips(state).some(x => x.id !== a.id && x.id !== b.id && x.owner !== a.owner && flag(state, x, 'obstructs') && segmentHitsPolygon(cp.a, cp.b, shipPoly(x)));
 }
 
 /** Front-arc-only geometry (for secondary weapons, which fire from the primary arc). */
@@ -155,14 +166,14 @@ export function frontGeometry(state, a, b) {
   const part = clipPolygon(shipPoly(b), arcPolygon(a.pose));
   if (part.length < 3) return null;
   const cp = closestPoints(shipPoly(a), part);
-  const obstructed = cp.d > 0 && obstaclePolys(state).some(o => segmentHitsPolygon(cp.a, cp.b, o));
+  const obstructed = cp.d > 0 && blocksLine(state, a, b, cp);
   return { d: cp.d, band: bandFor(cp.d), obstructed, touching: areTouching(state, a.id, b.id), line: { a: cp.a, b: cp.b }, arc: 'front' };
 }
 
 /** 360° geometry for turret weapons: closest points between bases. */
 export function turretGeometry(state, a, b) {
   const cp = closestPoints(shipPoly(a), shipPoly(b));
-  const obstructed = cp.d > 0 && obstaclePolys(state).some(o => segmentHitsPolygon(cp.a, cp.b, o));
+  const obstructed = cp.d > 0 && blocksLine(state, a, b, cp);
   return { d: cp.d, band: bandFor(cp.d), obstructed, touching: areTouching(state, a.id, b.id), line: { a: cp.a, b: cp.b } };
 }
 

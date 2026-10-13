@@ -11,5 +11,6 @@ export const ORDNANCE = {
   bomblet:      { name: 'Bomblet',         original: 'Bomblet',         kind: 'bomb', shape: { type: 'circle', r: 13 }, color: '#c7a3ff', text: 'Each ship at Range 1 rolls 2 attack dice and suffers any damage rolled.' },
   prox_mine:    { name: 'Proximity mine',  original: 'Proximity mine',  kind: 'mine', shape: { type: 'rect', w: 50, h: 30 }, color: '#e05252', text: 'The ship that touches it rolls 3 attack dice and suffers any damage rolled.' },
   snare_net:    { name: 'Snare net',       original: 'Conner net',      kind: 'mine', shape: { type: 'circle', r: 20 }, color: '#4dd2c8', text: 'The ship that touches it suffers 1 damage, receives 2 ion tokens and skips its action step.' },
+  cargo:        { name: 'Cargo cloud',     original: 'Cargo',           kind: 'mine', persist: true, shape: { type: 'circle', r: 22 }, color: '#b9a27a', text: 'Floating debris: a ship that moves into it gets 1 stress token and rolls 1 attack die (a critical deals 1 critical damage). It stays on the table.' },
   cluster_mine: { name: 'Cluster mine',    original: 'Cluster mine',    kind: 'mine', shape: { type: 'rect', w: 22, h: 22 }, color: '#e08a52', cluster: 3, text: 'Each token touched: roll 2 attack dice and suffer 1 damage per hit or critical.' },
 };

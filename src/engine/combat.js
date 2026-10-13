@@ -45,7 +45,7 @@ export function attackOptions(state, ship, { only = null } = {}) {
     const g = attackGeometry(state, ship, e);
     const tag = geo => `R${geo.band}${geo.obstructed ? ', obstructed' : ''}`;
     const blocked = geo => geo.touching && !(touchOk && g && g.band);
-    if (g && g.band && !blocked(g) && (!only || only.includes('primary'))) {
+    if (g && g.band && !blocked(g) && (!only || only.includes('primary')) && !hasFlag(state, ship, 'noPrimary')) {
       opts.push({ id: `${e.id}|primary`, label: `${shipName(e)} — primary (${tag(g)})`, target: e.id, weapon: 'primary' });
     }
     for (const u of ship.upgrades) {

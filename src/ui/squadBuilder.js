@@ -13,7 +13,7 @@ const ACTION_SHORT = { focus: 'Focus', lock: 'Lock', roll: 'Roll', evade: 'Evade
 const NOT_YET = new Set([]); // slots with no implemented upgrades yet
 
 export function mountSquadBuilder(el, { faction, squad, limit = 100, onChange }) {
-  const chassis = Object.values(SHIPS).filter(s => Object.values(PILOTS).some(p => p.ship === s.id && p.faction === faction));
+  const chassis = Object.values(SHIPS).filter(s => Object.values(PILOTS).some(p => p.ship === s.id && p.faction === faction && !p.hidden));
   const presets = PRESET_SQUADS[faction] || {};
   let openShip = null;
 
@@ -36,7 +36,7 @@ export function mountSquadBuilder(el, { faction, squad, limit = 100, onChange })
             <b>${esc(c.name)}</b><span class="sb-stats"><i class="atk">${c.attack}</i><i class="agi">${c.agility}</i><i class="hul">${c.hull}</i><i class="shd">${c.shields}</i></span>
             <small>${c.actions.map(a => ACTION_SHORT[a]).join(' · ')}</small></button>`).join('')}
         </div>
-        ${openShip ? `<div class="sb-add">${Object.values(PILOTS).filter(p => p.ship === openShip && p.faction === faction).sort((a, b) => b.skill - a.skill).map(p => `
+        ${openShip ? `<div class="sb-add">${Object.values(PILOTS).filter(p => p.ship === openShip && p.faction === faction && !p.hidden).sort((a, b) => b.skill - a.skill).map(p => `
           <button class="chip" data-add="${p.id}" title="${esc(p.text || 'No special ability.')}"><b>${p.skill}</b> ${p.unique ? '• ' : ''}${esc(p.name)} <small>${p.cost}${p.text ? ' · ability' : ''}</small></button>`).join('')}</div>` : ''}
         <div class="sb-foot ${pts > limit ? 'over' : ''}">${pts} / ${limit} pts ${errs.length ? `<span class="sb-err">${esc(errs[0])}</span>` : '<span class="ok">✓ legal</span>'}</div>
       </div>`;
