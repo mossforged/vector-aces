@@ -33,9 +33,12 @@ export class Session {
   /**
    * @param transport  { append(msg): Promise, subscribe(cb(msg, index)): unsubscribe }
    * @param me         seat this client controls ('p1' host | 'p2' guest), 'both' for hotseat, or 'spectator'
+   * @param opts.local  true when every seat is on this device (hotseat, vs-computer, watch-AI):
+   *                    dials are submitted directly instead of commit/reveal. Default: me === 'both'.
    */
-  constructor(transport, me) {
+  constructor(transport, me, opts = {}) {
     this.transport = transport; this.me = me;
+    this.local = opts.local ?? me === 'both';
     this.log = []; this.state = null; this.meta = null;
     this.commits = {};            // round -> { player: hash }
     this.pending = {};            // my own uncommitted-reveal: player -> { dials, salt, round }
@@ -50,7 +53,7 @@ export class Session {
   onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   _emit() { for (const fn of this.listeners) fn(this); }
   controls(player) { return this.me === 'both' || this.me === player; }
-  get online() { return this.me !== 'both'; }
+  get online() { return !this.local; }
 
   _receive(msg, index) {
     if (index !== this.log.length) return; // transports guarantee order; ignore dupes

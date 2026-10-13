@@ -2,7 +2,8 @@
 // Read-only with respect to the rules; all projection math lives in camera.js.
 //
 //   const view = new BoardView(canvas, { onShipClick, onPlace, onHover })
-//   view.setState(state, events)   // events animate (moves, destroyed, hits, lasers)
+//   view.setState(state, events)   // events animate in order on view.timeline (moves, shots, hits…)
+//   view.timeline                  // shared playback clock (render/timeline.js); view.timeline.busy()
 //   view.setViewer(player)         // rotates the table so `player`'s edge faces you
 //   view.setHighlight({ ships, poses, line, template })
 //   view.setPlacement({ kind: 'deploy'|'obstacle', ship, shape, zone }) | null
@@ -19,6 +20,9 @@ import { Camera } from './camera.js';
 import { label } from '../ui/names.js';
 import { ORDNANCE } from '../data/ordnance.js';
 import { ordnancePolys } from '../engine/ordnance.js';
+import { UPGRADES } from '../data/upgrades.js';
+import { Timeline } from './timeline.js';
+import { FX, shotKind } from './fx.js';
 
 const W = CONFIG.playArea;
 const MOVE_MS = 650;
@@ -33,6 +37,8 @@ export class BoardView {
     this.state = null; this.viewer = null;
     this.highlight = {}; this.placement = null; this.selected = null; this.hover = null;
     this.anims = []; this.fx = []; this.ghosts = [];
+    this.timeline = new Timeline(); this.particles = new FX();
+    this._attack = null; this._impact = null;
     this.mouse = null; this.placeRot = 0; this.dpr = 1;
     this.bgStars = null;
     this._bind();
@@ -53,30 +59,89 @@ export class BoardView {
     if (p && changed) this.placeRot = p.kind === 'deploy' ? (p.defaultHeading ?? 0) : 0;
   }
   setView(kind) { this.camera.reset(kind === 'top'); }
-  isAnimating() { return this.anims.length > 0; }
+  isAnimating() { return this.timeline.busy() > 0 || this.anims.length > 0; }
 
+  /** New state + the events that produced it. Call event-by-event (`setState(s, [ev])`) to
+   *  interleave with the dice mat, which shares `this.timeline`. Nothing is ever skipped: a long
+   *  backlog just plays faster (see Timeline.rate). */
   setState(state, events = []) {
     const prev = this.state;
     this.state = state;
     if (this.viewer) this.setViewer(this.viewer);
-    const now = performance.now();
-    if (Math.max(0, ...this.anims.map(a => a.start + a.dur)) - now > 400) this.anims = [];
-    let t = Math.max(now, ...this.anims.map(a => a.start + a.dur));
-    for (const ev of events) {
-      if (ev.type === 'move' && ev.path?.length > 1) {
-        const dur = ev.path.length > 2 ? MOVE_MS : 320;
-        this.anims.push({ ship: ev.ship, path: ev.path, start: t, dur }); t += dur;
-      } else if (ev.type === 'destroyed') {
-        const s = prev?.ships[ev.ship] || state.ships[ev.ship];
-        const pose = this._lastAnimPose(ev.ship) || s.pose;
-        if (pose) this.ghosts.push({ ship: { ...state.ships[ev.ship], pose }, start: t, dur: 1100 });
-      } else if (ev.type === 'damage' || ev.type === 'shield') {
-        this.fx.push({ kind: ev.type === 'shield' ? 'shield' : (ev.faceup ? 'crit' : 'hit'), ship: ev.ship, start: t + 150, dur: 700 });
-      } else if (ev.type === 'detonate') {
-        this.fx.push({ kind: 'blast', x: ev.x, y: ev.y, start: t, dur: 900, big: ev.kind === 'bomb' });
-      } else if (ev.type === 'attackResult') {
-        this.fx.push({ kind: 'laser', from: ev.attacker, to: ev.defender, start: t, dur: 600, hit: ev.hits + ev.crits > 0 });
+    for (const ev of events) this._event(ev, prev || state, state);
+  }
+
+  _shipPoint(st, id, z = FLY) { const s = st.ships[id]; const p = this._lastAnimPose(id) || s?.pose; return p ? { x: p.x, y: p.y, z } : null; }
+
+  _event(ev, prev, state) {
+    const tl = this.timeline, fx = this.particles;
+    switch (ev.type) {
+      case 'move': {
+        if (!(ev.path?.length > 1)) return;
+        this._impact = null;
+        const ms = ev.path.length > 2 ? MOVE_MS : 320;
+        const start = tl.reserve(ms);
+        this.anims.push({ ship: ev.ship, path: ev.path, start, dur: tl.scale(ms), color: state.players[state.ships[ev.ship].owner].color });
+        return;
       }
+      case 'attackDice':
+        if (ev.roll) { this._attack = { weapon: ev.weapon, n: ev.dice.length, attacker: ev.attacker, defender: ev.defender }; this._impact = null; }
+        return;
+      case 'attackResult': {
+        const at = this._attack?.attacker === ev.attacker ? this._attack : { weapon: 'primary', n: 2 };
+        const from = this._shipPoint(state, ev.attacker), to = this._shipPoint(state, ev.defender);
+        if (!from || !to) return;
+        const kind = shotKind(at.weapon, UPGRADES[at.weapon]);
+        const volley = /swarm|burst/.test(at.weapon) ? 3 : /rotary/.test(at.weapon) ? 3 : kind === 'laser' ? Math.max(1, Math.min(4, at.n)) : 1;
+        const lands = ev.hits + ev.crits > 0 || ev.hit ? Math.max(1, Math.min(volley, ev.hits + ev.crits)) : 0;
+        const color = state.players[state.ships[ev.attacker].owner].color;
+        const rate = tl.rate;
+        const travelEst = Math.max(180, Math.hypot(to.x - from.x, to.y - from.y) / (kind === 'torpedo' ? 0.38 : kind === 'missile' ? 0.45 : kind === 'cannon' ? 0.8 : kind === 'ion' ? 0.9 : 1.1));
+        const start = tl.reserve(travelEst + 250);
+        fx.at(start, () => fx.fire({ kind, from, to, color, hits: lands, n: volley, rate }));
+        this._impact = { t: start + travelEst / rate, i: 0, ion: kind === 'ion' };
+        return;
+      }
+      case 'damage': case 'shield': {
+        const p = this._shipPoint(state, ev.ship); if (!p) return;
+        const t = this._impact ? this._impact.t + tl.scale(110) * this._impact.i++ : tl.reserve(300);
+        const kind = ev.type === 'shield' ? 'shield' : this._impact?.ion ? 'ion' : ev.faceup ? 'crit' : 'hit';
+        fx.at(t, () => fx.impact(p, kind));
+        if (this._impact) tl.holdUntil(t + tl.scale(200));
+        return;
+      }
+      case 'destroyed': {
+        const s = prev.ships[ev.ship] || state.ships[ev.ship];
+        const pose = this._lastAnimPose(ev.ship) || s.pose;
+        if (!pose) return;
+        const t = this._impact ? Math.max(performance.now(), this._impact.t + tl.scale(110) * this._impact.i + tl.scale(150)) : tl.reserve(0);
+        const dur = tl.scale(1100);
+        this.ghosts.push({ ship: { ...state.ships[ev.ship], pose }, start: t, dur });
+        fx.at(t, () => fx.explode({ x: pose.x, y: pose.y, z: FLY }));
+        tl.holdUntil(t + tl.scale(900));
+        return;
+      }
+      case 'detonate': {
+        this._impact = null;
+        const t = tl.reserve(700);
+        this.fx.push({ kind: 'blast', x: ev.x, y: ev.y, start: t, dur: tl.scale(900), big: ev.kind === 'bomb' });
+        fx.at(t, () => fx.blast({ x: ev.x, y: ev.y, z: 0 }, ev.kind === 'bomb'));
+        this._impact = { t: t + tl.scale(150), i: 0 };
+        return;
+      }
+      case 'drop': {
+        const p = this._shipPoint(state, ev.ship); if (!p) return;
+        const t = tl.reserve(450);
+        fx.at(t, () => fx.drop(p));
+        return;
+      }
+      case 'cloak': case 'decloak': {
+        const p = this._shipPoint(state, ev.ship); if (!p) return;
+        const t = tl.reserve(ev.type === 'cloak' ? 500 : 0);
+        fx.at(t, () => fx.shimmer(p));
+        return;
+      }
+      default:
     }
   }
 
@@ -226,7 +291,7 @@ export class BoardView {
     const items = [
       ...rocks.map(r => ({ kind: 'rock', r, depth: -1e6 + cam.project(centroid(r.poly).x, centroid(r.poly).y).y })),
       ...ships.map(o => ({ kind: 'ship', ...o, depth: cam.project(o.pose.x, o.pose.y).y })),
-      ...this.ghosts.filter(g => now >= g.start).map(g => ({ kind: 'ghost', g, depth: cam.project(g.ship.pose.x, g.ship.pose.y).y })),
+      ...this.ghosts.map(g => ({ kind: 'ghost', g, depth: cam.project(g.ship.pose.x, g.ship.pose.y).y })),
     ].sort((a, b) => a.depth - b.depth);
     for (const it of items) {
       if (it.kind === 'rock') drawRock(ctx, cam, it.r.poly, it.r.h);
@@ -236,17 +301,25 @@ export class BoardView {
         ctx.globalAlpha = 1;
       }
       else {
-        const k = (now - it.g.start) / it.g.dur;
+        const k = Math.max(0, (now - it.g.start) / it.g.dur);
         ctx.globalAlpha = Math.max(0, 1 - k);
         drawModel(ctx, cam, it.g.ship, it.g.ship.pose, { sink: k * FLY, color: st.players[it.g.ship.owner].color });
         ctx.globalAlpha = 1;
         const p = cam.project(it.g.ship.pose.x, it.g.ship.pose.y, FLY * (1 - k));
         ctx.setTransform(1, 0, 0, 1, 0, 0);
-        explosion(ctx, p, k, cam.scale);
+        if (k > 0) explosion(ctx, p, k, cam.scale);
       }
     }
 
     // ---- effects ----
+    for (const a of this.anims) {
+      if (now < a.start || now > a.start + a.dur || a.path.length < 3) continue;
+      const s = st.ships[a.ship]; if (!s) continue;
+      const pose = this._pose(s, now);
+      this.particles.trail({ x: pose.x, y: pose.y, z: FLY }, pose.h, a.color || '#ffffff');
+    }
+    this.particles.step(now);
+    this.particles.draw(ctx, cam);
     for (const f of this.fx) {
       if (now < f.start) continue;
       const k = (now - f.start) / f.dur;
@@ -257,22 +330,6 @@ export class BoardView {
         gr.addColorStop(0, `rgba(255,240,200,${0.9 * (1 - k)})`); gr.addColorStop(0.5, `rgba(255,140,60,${0.6 * (1 - k)})`); gr.addColorStop(1, 'rgba(255,60,20,0)');
         ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(f.x, f.y, Math.max(1, r), 0, Math.PI * 2); ctx.fill();
         continue;
-      }
-      if (f.kind === 'laser') {
-        const a = st.ships[f.from], b = st.ships[f.to]; if (!a?.pose || !b?.pose) continue;
-        const pa = cam.project(a.pose.x, a.pose.y, FLY), pb = cam.project(b.pose.x, b.pose.y, FLY);
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        const head = Math.min(1, k * 2.2), tail = Math.max(0, k * 2.2 - 0.6);
-        ctx.strokeStyle = st.players[a.owner].color; ctx.lineWidth = 3 * this.dpr; ctx.lineCap = 'round';
-        ctx.shadowColor = st.players[a.owner].color; ctx.shadowBlur = 12 * this.dpr;
-        ctx.beginPath(); ctx.moveTo(pa.x + (pb.x - pa.x) * tail, pa.y + (pb.y - pa.y) * tail); ctx.lineTo(pa.x + (pb.x - pa.x) * head, pa.y + (pb.y - pa.y) * head); ctx.stroke();
-        ctx.shadowBlur = 0;
-      } else {
-        const s = st.ships[f.ship]; const pose = s?.pose || this._lastAnimPose(f.ship); if (!pose) continue;
-        ctx.setTransform(...cam.matrix(FLY));
-        const col = f.kind === 'shield' ? '90,170,255' : f.kind === 'crit' ? '255,200,60' : '255,90,60';
-        ctx.strokeStyle = `rgba(${col},${1 - k})`; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(pose.x, pose.y, 22 + k * 24, 0, Math.PI * 2); ctx.stroke();
       }
     }
 

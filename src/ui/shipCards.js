@@ -4,6 +4,7 @@ import { UPGRADES } from '../data/upgrades.js';
 import { DAMAGE_CARDS } from '../data/damageDeck.js';
 import { Q } from '../engine/index.js';
 import { esc } from './glyphs.js';
+import { cardLink } from './names.js';
 
 export function renderShipCards(el, { state, me, selected, onSelect }) {
   const order = [...state.playerOrder].sort((a, b) => (a === me ? -1 : b === me ? 1 : 0));
@@ -26,7 +27,7 @@ function card(state, s, selected) {
   <div class="scard ${s.destroyed ? 'dead' : ''} ${selected === s.id ? 'sel' : ''}" data-ship="${s.id}" style="--fc:${state.players[s.owner].color}">
     <div class="scard-top">
       <span class="ps" title="Pilot skill">${Q.effectiveSkill(state, s)}</span>
-      <div class="nm"><b>${pl.unique ? '• ' : ''}${esc(Q.shipName(s))}</b><small>${esc(ch.name)}</small></div>
+      <div class="nm"><b>${pl.unique ? '• ' : ''}${esc(Q.shipName(s))}</b><small>${esc(ch.name)} ${cardLink(s.pilot)}</small></div>
       <div class="stats">
         <span class="st atk" title="Primary weapon">${Q.stat(state, s, 'attack')}</span>
         <span class="st agi" title="Agility">${Q.stat(state, s, 'agility')}</span>
@@ -45,7 +46,7 @@ function card(state, s, selected) {
       ${s.round.revealed ? `<span class="tok man">Flew ${s.round.revealed}</span>` : ''}
     </div>
     ${pl.ability ? `<p class="ability ${Q.abilityActive(s) ? '' : 'off'}">${esc(pl.text)}</p>` : ''}
-    ${s.upgrades.length ? `<ul class="ups">${s.upgrades.map(u => `<li class="${u.discarded ? 'gone' : ''}" title="${esc(UPGRADES[u.id].text)}">${esc(UPGRADES[u.id].name)}</li>`).join('')}</ul>` : ''}
+    ${s.upgrades.length ? `<ul class="ups">${s.upgrades.map(u => `<li class="${u.discarded ? 'gone' : ''}" title="${esc(UPGRADES[u.id].text)}">${esc(UPGRADES[u.id].name)} ${cardLink(u.id)}</li>`).join('')}</ul>` : ''}
     ${faceup.length || facedown ? `<div class="dmg">${faceup.map(c => `<span class="crit" title="${esc(DAMAGE_CARDS[c.card].text)}">✸ ${esc(DAMAGE_CARDS[c.card].name)}</span>`).join('')}${facedown ? `<span class="fd">${facedown} facedown</span>` : ''}</div>` : ''}`}
   </div>`;
 }

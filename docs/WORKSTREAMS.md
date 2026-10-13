@@ -102,8 +102,9 @@ Make the table prettier: art, effects, camera, readability.
   `setSelected`) and engine events (`move`, `destroyed`, `damage`, `shield`, `attackResult`, `lock`,
   `reveal`, `roll`, `attackDice`, `defenseDice`).
 - **Standees:** drop top-down PNGs in `assets/` and set `IMAGE_OVERRIDES` in `shipArt.js`.
+- **Effects:** `src/render/fx.js` (projectiles, impacts, particles) + `render/timeline.js` (playback order).
 - **Ideas:** show the executed template briefly after each move, range-ruler drag tool,
-  engine trails, explosion sprites, background image, upright standee images, a Three.js renderer
+  sound effects synced to fx, background image, upright standee images, a Three.js renderer
   that implements the same BoardView API (the camera/board split makes that a drop-in swap).
 
 ## E. Panels & UX
@@ -122,9 +123,10 @@ Lobby, dial picker, ship cards, dice tray, log, help, mobile layout.
 
 ## G. Computer opponent
 - **Read:** `src/ai/simpleBot.js`, `src/engine/index.js` (API), `src/engine/queries.js`
-- **Interface:** `botAction(state, player) → action`. Plug in via a `BotTransport`-style wrapper or in
-  `app.js` (when the prompt belongs to the bot's player, call `session.act(botAction(...))`).
-- **Ideas:** score dials by simulating `buildPath` endpoints vs enemy arcs; avoid asteroids/edges.
+- **Interface:** `botAction(state, player) → action`; `app.js` autopilot drives bot seats (lobby modes
+  *Vs computer* and *Watch AI battle*).
+- **Ideas:** predict enemy moves, smarter action/target choice (lock the target you'll shoot,
+  evade when in many arcs), difficulty levels, choose upgrade-specific options.
 
 ## H. Squad building
 - **Read:** `src/ui/squadBuilder.js`, `src/data/presets.js`, `engine/setup.js` (`validateSquad`, `squadPoints`)

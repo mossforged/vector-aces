@@ -7,6 +7,7 @@ import { PRESET_SQUADS } from '../data/presets.js';
 import { squadPoints, validateSquad, upgradeAllowed } from '../engine/index.js';
 import { randomSquad } from '../ai/simpleBot.js';
 import { esc } from './glyphs.js';
+import { cardLink } from './names.js';
 
 const ACTION_SHORT = { focus: 'Focus', lock: 'Lock', roll: 'Roll', evade: 'Evade', boost: 'Boost' };
 const NOT_YET = new Set([]); // slots with no implemented upgrades yet
@@ -70,7 +71,7 @@ export function mountSquadBuilder(el, { faction, squad, limit = 100, onChange })
         <option value="">${SLOT_LABELS[slot]}: none</option>${opts.map(u => `<option value="${u.id}" ${cur === u.id ? 'selected' : ''} title="${esc(u.text)}">${esc(u.name)} (${u.cost})</option>`).join('')}</select>`;
     }).join('');
     const cost = p.cost + (e.upgrades || []).reduce((n, u) => n + UPGRADES[u].cost, 0);
-    return `<li><span class="ps">${p.skill}</span><span class="sb-name" title="${esc(p.text || '')}">${esc(p.name)} <small>${SHIPS[p.ship].name}</small></span>${selects}<span class="sb-cost">${cost}</span><button class="x" data-del="${i}" title="Remove">✕</button></li>`;
+    return `<li><span class="ps">${p.skill}</span><span class="sb-name" title="${esc(p.text || '')}">${esc(p.name)} <small>${SHIPS[p.ship].name}</small> ${cardLink(p.id)}${(e.upgrades || []).map(cardLink).join(' ')}</span>${selects}<span class="sb-cost">${cost}</span><button class="x" data-del="${i}" title="Remove">✕</button></li>`;
   }
 
   render();

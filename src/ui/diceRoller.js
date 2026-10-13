@@ -11,8 +11,9 @@ const TUMBLE = 760, STAGGER = 110;
 const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 export class DiceRoller {
-  constructor(el) {
-    this.el = el; this.cursor = 0; this.hideTimer = null;
+  /** @param timeline shared playback clock (render/timeline.js) so dice and board effects take turns */
+  constructor(el, timeline) {
+    this.el = el; this.tl = timeline; this.hideTimer = null;
     this.rows = { attack: [], defense: [] };   // last shown dice per row
   }
 
@@ -28,17 +29,17 @@ export class DiceRoller {
     }
   }
 
+  get cursor() { return this.tl.cursor; }
+
   _at(delay, fn) {
-    const now = performance.now();
-    const start = Math.max(now, this.cursor);
-    this.cursor = start + delay;
-    setTimeout(fn, start - now);
+    const start = this.tl.reserve(delay);
+    setTimeout(fn, start - performance.now());
   }
 
   _show() { clearTimeout(this.hideTimer); this.el.hidden = false; this.el.classList.remove('fade'); }
   _hideLater(ms) {
     clearTimeout(this.hideTimer);
-    this.hideTimer = setTimeout(() => { this.el.classList.add('fade'); this.hideTimer = setTimeout(() => { this.el.hidden = true; }, 400); }, ms);
+    this.hideTimer = setTimeout(() => { this.el.classList.add('fade'); this.hideTimer = setTimeout(() => { this.el.hidden = true; }, 400); }, this.tl.scale(ms));
   }
 
   _startAttack(state, ev) {
@@ -125,12 +126,14 @@ export class DiceRoller {
     setFace(el, kind, face);
     if (reduced()) return el;
     if (mode === 'drop') { el.classList.add('drop'); return el; }
-    el.classList.add('tumble'); el.style.animationDelay = `${delay}ms`;
+    const tumble = this.tl.scale(TUMBLE);
+    delay = this.tl.scale(delay);
+    el.classList.add('tumble'); el.style.animationDelay = `${delay}ms`; el.style.animationDuration = `${tumble}ms`;
     const faces = kind === 'attack' ? ATTACK_FACES : DEFENSE_FACES;
     const start = performance.now() + delay;
     const spin = () => {
       const t = performance.now();
-      if (t >= start + TUMBLE - 120) { setFace(el, kind, face); el.classList.add('landed'); return; }
+      if (t >= start + tumble - 120 * (tumble / TUMBLE)) { setFace(el, kind, face); el.classList.add('landed'); return; }
       if (t >= start) setFace(el, kind, faces[(Math.random() * 8) | 0], true);
       setTimeout(spin, 70);
     };

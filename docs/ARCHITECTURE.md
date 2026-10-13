@@ -142,8 +142,13 @@ peg `FLY` mm above their base, labels are drawn upright in screen space. Tall ob
 back-to-front by projected depth. Input: drag rotates/tilts, wheel zooms about the cursor,
 right/shift-drag pans; `camera.unproject` turns clicks back into table coordinates.
 
-`BoardView` animates `move` events along the sampled template path, and shows hit/shield/crit
-rings, laser bolts and explosions from `damage`/`shield`/`attackResult`/`destroyed` events.
+`BoardView` plays engine events back in order on a shared `Timeline` (`render/timeline.js`):
+every effect reserves a slot after whatever is queued, so nothing teleports — a long backlog just
+plays faster. Moves follow the sampled template path with engine trails; `attackResult` fires a
+volley from the attacker (look picked by `shotKind()`: laser, ion, cannon, missile, torpedo; hits
+land, misses streak past); `shield`/`damage` events spawn impacts timed to the volley's arrival;
+`destroyed`, `detonate`, `drop`, `cloak`/`decloak` have their own effects. The particle layer is
+`render/fx.js` (table coordinates, projected each frame, additive glow); add a new look there.
 Ship art is a function per `art` key in `shipArt.js`; set `IMAGE_OVERRIDES[key] = 'assets/x.png'`
 to use a picture instead (standee approach — one image, moved and rotated).
 
@@ -153,8 +158,14 @@ original ones in every text node and title as panels render (and restores them w
 off); canvas text goes through `label()`. Per viewer, stored in localStorage; shortcut N.
 
 `diceRoller.js` turns `attackDice`/`defenseDice`/`attackResult`/`roll` events into the on-board
-dice mat (tumble on roll and reroll, flash on change, drop-in for added dice). It keeps a timeline
-`cursor`; app.js holds back modify-dice prompts until the dice have landed. `shipTooltip.js`
+dice mat (tumble on roll and reroll, flash on change, drop-in for added dice). It shares the board's
+Timeline; app.js feeds events to both one at a time so dice and shots take turns, and holds back the
+next prompt until the timeline is idle.
+
+Computer players: `app.start(transport, me, { bots: ['p2'] })` (vs computer) or
+`('spectator', { bots: ['p1','p2'] })` (watch). After each change the autopilot waits for the
+timeline, then calls `botAction()` for a bot seat and `session.act()`s it. Bot games use a
+non-persisted LocalTransport and `Session({ local: true })` (dials submitted directly). `shipTooltip.js`
 renders the hover card from the same `Q.*` queries as the ship cards.
 
 `app.js` subscribes to the Session and re-renders panels on every change. Each panel is a function

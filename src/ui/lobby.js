@@ -7,6 +7,7 @@ import { LocalTransport, FirebaseTransport, connectFirebase } from '../net/trans
 import { FIREBASE_CONFIG } from '../net/firebaseConfig.js';
 import { mountSquadBuilder } from './squadBuilder.js';
 import { esc } from './glyphs.js';
+import { randomSquad } from '../ai/simpleBot.js';
 
 const clone = x => JSON.parse(JSON.stringify(x));
 const randomSeed = () => crypto.getRandomValues(new Uint32Array(1))[0];
@@ -59,6 +60,8 @@ function homeScreen(el, app) {
       ${hasHotseat ? '<button class="btn wide" data-resume>Resume last same-screen game</button>' : ''}
       <div class="tabs">
         <button class="tab ${mode === 'hotseat' ? 'on' : ''}" data-mode="hotseat">Same screen</button>
+        <button class="tab ${mode === 'ai' ? 'on' : ''}" data-mode="ai">Vs computer</button>
+        <button class="tab ${mode === 'watch' ? 'on' : ''}" data-mode="watch">Watch AI battle</button>
         <button class="tab ${mode === 'host' ? 'on' : ''}" data-mode="host">Host online game</button>
       </div>
       <div class="panel" data-body></div>
@@ -66,8 +69,8 @@ function homeScreen(el, app) {
     el.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { mode = b.dataset.mode; render(); });
     el.querySelector('[data-resume]')?.addEventListener('click', () => app.start(new LocalTransport('hotseat'), 'both'));
     const body = el.querySelector('[data-body]');
-    if (mode === 'hotseat') hotseatForm(body, app);
-    else hostForm(body, app);
+    if (mode === 'host') hostForm(body, app);
+    else hotseatForm(body, app, mode);
   };
   render();
 }
@@ -76,22 +79,42 @@ function optionsBlock() {
   return `<label class="check"><input type="checkbox" data-obst checked> Asteroid field (6 obstacles, placed alternately)</label>`;
 }
 
-function hotseatForm(body, app) {
+/**
+ * Two-seat setup on this device. kind: 'hotseat' (two humans), 'ai' (you vs the computer),
+ * 'watch' (computer vs computer — a quick way to test rules and content).
+ */
+function hotseatForm(body, app, kind = 'hotseat') {
+  const L = {
+    hotseat: { n1: 'Player 1', n2: 'Player 2', l1: 'Player 1 (near edge)', l2: 'Player 2 (far edge)', go: 'Start battle' },
+    ai: { n1: store.get('va-name') || 'You', n2: 'Computer', l1: 'You (near edge)', l2: 'Computer (far edge)', go: 'Fight the computer' },
+    watch: { n1: 'Blue AI', n2: 'Red AI', l1: 'Computer 1 (near edge)', l2: 'Computer 2 (far edge)', go: 'Start AI battle' },
+  }[kind];
+  const randomOpt = kind === 'hotseat' ? '' : `<label class="check"><input type="checkbox" data-rand checked> ${kind === 'ai' ? 'Computer flies a random squad (100 pts)' : 'Random squads for both (100 pts)'}</label>`;
   body.innerHTML = `
+    ${kind === 'watch' ? '<p class="muted small">The computer flies both sides; pause or speed up from the top bar. Handy for testing new ships and cards.</p>' : ''}
+    ${kind === 'ai' ? '<p class="muted small">A simple computer opponent: it flies toward you, takes sensible actions and shoots whatever it can.</p>' : ''}
     <div class="two"><div data-seat="1"></div><div data-seat="2"></div></div>
-    ${optionsBlock()}
-    <button class="btn primary wide" data-start>Start battle</button>
+    ${optionsBlock()}${randomOpt}
+    <button class="btn primary wide" data-start>${L.go}</button>
     <p class="err" data-err></p>`;
-  const s1 = seatPicker(body.querySelector('[data-seat="1"]'), { label: 'Player 1 (near edge)', name: 'Player 1', faction: 'league' });
-  const s2 = seatPicker(body.querySelector('[data-seat="2"]'), { label: 'Player 2 (far edge)', name: 'Player 2', faction: 'dominion' });
+  const s1 = seatPicker(body.querySelector('[data-seat="1"]'), { label: L.l1, name: L.n1, faction: 'league' });
+  const s2 = seatPicker(body.querySelector('[data-seat="2"]'), { label: L.l2, name: L.n2, faction: 'dominion' });
   body.querySelector('[data-start]').onclick = async () => {
     const a = s1.get(), b = s2.get();
-    const errs = [...validateSquad(a.faction, a.squad, 100).map(e => `Player 1: ${e}`), ...validateSquad(b.faction, b.squad, 100).map(e => `Player 2: ${e}`)];
+    if (body.querySelector('[data-rand]')?.checked) {
+      if (kind === 'watch') a.squad = await randomSquad(a.faction);
+      b.squad = await randomSquad(b.faction);
+    }
+    const errs = [...validateSquad(a.faction, a.squad, 100).map(e => `${L.n1}: ${e}`), ...validateSquad(b.faction, b.squad, 100).map(e => `${L.n2}: ${e}`)];
     if (errs.length) { body.querySelector('[data-err]').textContent = errs[0]; return; }
-    const t = new LocalTransport('hotseat'); t.clear();
-    await t.append({ kind: 'host', faction: a.faction, name: a.name || 'Player 1', squad: a.squad, obstacles: body.querySelector('[data-obst]').checked, seed: randomSeed() });
-    await t.append({ kind: 'join', faction: b.faction, name: b.name || 'Player 2', squad: b.squad });
-    app.start(t, 'both');
+    if (kind === 'ai') store.set('va-name', a.name || 'You');
+    const t = kind === 'hotseat' ? new LocalTransport('hotseat') : new LocalTransport('ai', { persist: false });
+    t.clear();
+    await t.append({ kind: 'host', faction: a.faction, name: a.name || L.n1, squad: a.squad, obstacles: body.querySelector('[data-obst]').checked, seed: randomSeed() });
+    await t.append({ kind: 'join', faction: b.faction, name: b.name || L.n2, squad: b.squad });
+    if (kind === 'hotseat') app.start(t, 'both');
+    else if (kind === 'ai') app.start(t, 'p1', { bots: ['p2'] });
+    else app.start(t, 'spectator', { bots: ['p1', 'p2'] });
   };
 }
 

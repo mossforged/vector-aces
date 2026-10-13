@@ -18,4 +18,4 @@ export const CONDITIONS = {
 
 };
 
-export const ORIGINALS = {"ships":{},"pilots":{},"upgrades":{},"conditions":{}};
+export const ORIGINALS = {"ships":{},"pilots":{},"upgrades":{},"conditions":{},"images":{}};

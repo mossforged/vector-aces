@@ -17,6 +17,7 @@ export const ORIGINAL_NAMES = {
   pilots: Object.assign({}, ...batches.map(b => b.ORIGINALS.pilots)),
   upgrades: Object.assign({}, ...batches.map(b => b.ORIGINALS.upgrades)),
   conditions: Object.assign({}, ...batches.map(b => b.ORIGINALS.conditions)),
+  images: Object.assign({}, ...batches.map(b => b.ORIGINALS.images || {})),
   damage: DAMAGE_ORIGINALS,
   slots: SLOT_ORIGINALS,
 };

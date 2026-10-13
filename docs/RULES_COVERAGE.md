@@ -80,5 +80,5 @@ Head Wound (no pilot ability / elite upgrades).
 ## Not yet
 - ⬜ Missions (escort, asteroid run, satellites) — see WORKSTREAMS.md
 - ⬜ Team play (3–4 players)
-- ⬜ Computer opponent UI (bot exists for tests; `randomSquad()` powers the squad builder's Random button)
+- ✅ Computer opponent (lobby: *Vs computer*, *Watch AI battle*) — ◐ a simple heuristic bot
 - ⬜ Measuring tools in the UI (range ruler drag), undo, replay viewer

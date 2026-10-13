@@ -258,3 +258,14 @@ label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--t
 #game:not([hidden]) ~ .lobby-corner { display: none; }
 .names-toggle[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 .tt-status .good { color: #8fe0a8; }
+
+/* original card reference links (only while the names toggle is on) */
+.orig-link { display: none; font-size: 10.5px; color: var(--accent); text-decoration: none; border: 1px solid #f29a3a55; border-radius: 4px; padding: 0 4px; margin-left: 2px; white-space: nowrap; }
+.orig-link:hover { background: #f29a3a22; }
+.show-original .orig-link { display: inline-block; }
+
+/* computer-player controls (top bar) */
+.autobar { display: inline-flex; align-items: center; gap: 2px; margin-right: 6px; }
+.autobar:empty { display: none; }
+.autobar .auto-lbl { font-family: var(--display); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+.autobar .btn.on { border-color: var(--accent); color: var(--accent); }

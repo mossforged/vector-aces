@@ -33,7 +33,7 @@ export function renderPrompt(el, app) {
       return;
     }
     const planner = mine[0];
-    if (!session.online && ui.handoffFor !== planner) {
+    if (session.me === 'both' && ui.handoffFor !== planner) {
       el.innerHTML = `<div class="handoff" style="--fc:${st.players[planner].color}">
         <div class="phase-title">Planning · Round ${st.round}</div>
         <h2>Pass to ${esc(st.players[planner].name)}</h2>

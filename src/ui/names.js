@@ -47,9 +47,25 @@ const swap = text => String(text).replace(RE, m => MAP.get(m));
 
 export const showingOriginal = () => original;
 
+const IMG_BASE = 'https://github.com/guidokessels/xwing-data/blob/master/images/';
+/**
+ * A small "view original card" link for a pilot / upgrade / condition id ('' if none).
+ * Always rendered; CSS only shows it while the original-names toggle is on. It opens the card
+ * image in the community dataset repo in a new tab — the game itself never contains that art.
+ */
+export function cardLink(id) {
+  const path = O.images?.[id];
+  if (!path) return '';
+  const href = IMG_BASE + path.split('/').map(encodeURIComponent).join('/');
+  return `<a class="orig-link" href="${href}" target="_blank" rel="noopener" title="Open the original card in a new tab" data-noswap="1">card ↗</a>`;
+}
+const syncRootClass = () => document.documentElement.classList.toggle('show-original', original);
+syncRootClass();
+
 export function setOriginal(on) {
   original = !!on;
   try { localStorage.setItem(KEY, original ? 'original' : 'theme'); } catch {}
+  syncRootClass();
   if (original) applyTree(document.body); else restoreAll();
   for (const fn of listeners) fn(original);
 }

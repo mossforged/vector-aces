@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-13 — v0.5 AI games & production value
+- *Vs computer* and *Watch AI battle* lobby modes; pause and 1×/2×/4× playback from the top bar. Smarter bot dials (lines up shots, avoids rocks and red moves while stressed).
+- Ships always fly their whole path: one shared playback timeline for the table and dice; long backlogs speed up instead of skipping. The next decision waits until the table catches up.
+- Effects: faction-coloured laser volleys, ion bolts with crackle, cannon slugs, missiles and torpedoes with smoke trails, hit sparks, shield flashes, critical fires, debris explosions, bomb drops and shockwaves, cloak shimmer, engine trails.
+- "card ↗" links to the original card images on GitHub (shown while the original-names toggle is on).
+
 ## 2026-10-12 — v0.4 foundation for every small ship
 - Seats and factions split: each player picks any faction (mirror matches allowed); faction now belongs to pilots. New third faction: Freeport Syndicate (ships arrive in its batch).
 - "Original names" toggle (top bar / lobby / key N): swaps every name on your screen for the original game's, per viewer.

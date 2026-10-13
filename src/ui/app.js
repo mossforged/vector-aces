@@ -12,6 +12,7 @@ import { esc } from './glyphs.js';
 import { DiceRoller } from './diceRoller.js';
 import { renderShipTooltip, placeTooltip } from './shipTooltip.js';
 import { namesToggleButton, onNamesChange } from './names.js';
+import { botAction } from '../ai/simpleBot.js';
 
 const $ = sel => document.querySelector(sel);
 
@@ -24,7 +25,8 @@ class App {
       onHover: (id, x, y) => this._hover(id, x, y),
       onPlace: pos => this._place(pos),
     });
-    this.roller = new DiceRoller($('#dicemat'));
+    this.roller = new DiceRoller($('#dicemat'), this.board.timeline);
+    this.bots = new Set(); this.auto = { paused: false, fails: 0 };
     $('#names-toggle-game').append(namesToggleButton());
     $('#names-toggle-lobby').append(namesToggleButton());
     document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => {
@@ -38,24 +40,84 @@ class App {
     showLobby($('#lobby'), this);
   }
 
-  start(transport, me) {
+  /**
+   * @param me          'p1' | 'p2' | 'both' (hotseat) | 'spectator'
+   * @param opts.bots   seats the computer flies on this device, e.g. ['p2'] (vs computer) or ['p1','p2'] (watch)
+   * @param opts.local  every seat is on this device (no commit/reveal); implied by bots
+   */
+  start(transport, me, opts = {}) {
     this.session?.close();
+    clearTimeout(this._autoTimer);
     this.ui = { selected: null, drafts: {}, handoffFor: null };
-    this.session = new Session(transport, me);
+    this.bots = new Set(opts.bots || []);
+    this.auto = { paused: false, fails: 0 };
+    this.board.timeline.speed = 1;
+    this.session = new Session(transport, me, { local: opts.local ?? (me === 'both' || this.bots.size > 0) });
     this.session.onChange(s => {
       const fresh = s.state !== this.state;
       this.state = s.state;
-      if (this.state && fresh) { this.board.setState(this.state, s.lastEvents); this.roller.update(this.state, s.lastEvents); }
+      if (this.state && fresh) this._play(s.lastEvents);
       this.render();
+      this._autoplay();
     });
+    this._renderAutoBar();
+    $('#btn-concede').hidden = me === 'spectator';
     this.board.setViewer(me === 'both' || me === 'spectator' ? null : me);
     this.board.setView('iso');
     this.state = this.session.state;
     if (this.state) this.board.setState(this.state, []);
     this.render();
+    this._autoplay();
+  }
+
+  /** Feed events to the board and the dice mat one at a time so they share one timeline. */
+  _play(events) {
+    if (!events?.length) { this.board.setState(this.state, []); return; }
+    for (const ev of events) { this.board.setState(this.state, [ev]); this.roller.update(this.state, [ev]); }
+  }
+
+  // ---------- computer-controlled seats ----------
+  _autoplay() {
+    clearTimeout(this._autoTimer);
+    const st = this.state;
+    if (!this.bots.size || !st || st.winner || this.auto.paused) return;
+    const tl = this.board.timeline;
+    const think = st.prompt?.kind === 'planning' ? 600 : st.phase === 'setup' ? 250 : 450;
+    this._autoTimer = setTimeout(() => this._autoStep(), tl.busy() + tl.scale(think));
+  }
+
+  _autoStep() {
+    const st = this.state;
+    if (!st || st.winner || this.auto.paused || !this.session) return;
+    if (this.board.timeline.busy() > 30) return this._autoplay();
+    for (const seat of this.bots) {
+      const a = botAction(st, seat);
+      if (!a) continue;
+      const before = this.session.log.length;
+      this.session.act(a).then(() => {
+        // a rejected choice changes nothing; try again (botAction is random) a few times
+        if (this.session && this.session.log.length === before && ++this.auto.fails < 20) this._autoplay();
+        else this.auto.fails = 0;
+      });
+      return;
+    }
+  }
+
+  _renderAutoBar() {
+    const bar = $('#autobar');
+    if (!this.bots.size) { bar.innerHTML = ''; return; }
+    const tl = this.board.timeline;
+    bar.innerHTML = `<span class="auto-lbl">${this.bots.size > 1 ? 'AI battle' : 'vs AI'}</span>
+      ${this.bots.size > 1 ? `<button class="btn ghost small" data-pause title="Pause / resume the computer">${this.auto.paused ? '▶' : '⏸'}</button>` : ''}
+      ${[1, 2, 4].map(n => `<button class="btn ghost small ${tl.speed === n ? 'on' : ''}" data-speed="${n}" title="Playback speed">${n}×</button>`).join('')}`;
+    bar.querySelector('[data-pause]')?.addEventListener('click', () => {
+      this.auto.paused = !this.auto.paused; this._renderAutoBar(); this._autoplay();
+    });
+    bar.querySelectorAll('[data-speed]').forEach(b => b.onclick = () => { tl.speed = +b.dataset.speed; this._renderAutoBar(); });
   }
 
   backToLobby() {
+    clearTimeout(this._autoTimer); this.bots = new Set(); this._renderAutoBar();
     this.session?.close(); this.session = null; this.state = null;
     history.replaceState(null, '', location.pathname);
     $('#game').hidden = true;
@@ -124,11 +186,13 @@ class App {
     const waiting = waitingOn(st);
     $('#status').innerHTML = st.winner ? `<b>${esc(st.players[st.winner].name)} wins</b>`
       : `<span>Round ${st.round || '–'}</span><span>${phaseName(st)}</span>${waiting.map(p => `<span class="pill" style="--fc:${st.players[p].color}">${esc(st.players[p].name)}${s.controls(p) ? ' (you)' : ''}</span>`).join('')}`;
-    const rolling = this.roller.cursor - performance.now();
-    if (st.prompt && /^(mod|attackPrep|onHit)/.test(st.prompt.kind) && rolling > 50) {
-      $('#prompt').innerHTML = '<div class="phase-title">Combat</div><p class="muted">Rolling dice…</p>';
-      clearTimeout(this._promptTimer);
-      this._promptTimer = setTimeout(() => this.render(), rolling);
+    // Hold the next decision (and the victory banner) until the table has caught up with it.
+    const busy = this.board.timeline.busy();
+    clearTimeout(this._promptTimer);
+    if ((st.prompt || st.winner) && busy > 60) {
+      this.board.setPlacement(null); this.board.setHighlight({});
+      $('#prompt').innerHTML = `<div class="phase-title">${phaseName(st)}</div><p class="muted">${st.phase === 'combat' ? 'Shots incoming…' : 'Ships manoeuvring…'}</p>`;
+      this._promptTimer = setTimeout(() => this.render(), busy);
     } else renderPrompt($('#prompt'), this);
     if (this.ui.hover && !$('#tooltip').hidden) renderShipTooltip($('#tooltip'), st, this.ui.hover);
     renderDiceTray($('#dice'), { state: st });

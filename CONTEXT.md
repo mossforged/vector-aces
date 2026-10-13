@@ -30,12 +30,13 @@ src/engine/    PURE RULES. deterministic reducer; no DOM, no network. Public API
   geometry.js    polygons, arcs, range                 maneuvers.js  template paths, barrel rolls
   dice.js, rng.js
 src/render/    camera.js (isometric projection: rotate/tilt/zoom/pan), board.js (table, minis on pegs, arcs, bombs,
-               animation), shipArt.js (vector art / image overrides) + art/<batch>.js
+               event playback), timeline.js (shared playback clock), fx.js (shots, impacts, explosions,
+               engine trails), shipArt.js (vector art / image overrides) + art/<batch>.js
 src/ui/        app.js (shell), lobby.js, squadBuilder.js, promptPanel.js, dialPicker.js, shipCards.js, shipTooltip.js (hover card),
                diceRoller.js (animated on-board dice), diceTray.js (sidebar record), logPanel.js, glyphs.js,
                names.js (original-names display toggle)
 src/net/       session.js (ordered log → engine, secret dials), transports.js (local + Firebase), firebaseConfig.js
-src/ai/        simpleBot.js (test driver / future computer opponent; randomSquad())
+src/ai/        simpleBot.js (tests + computer opponent: botAction, chooseDials, randomSquad); app.js autopilot
 tools/xwing-import/  catalog/<batch>.js (dataset id → our names & wording), maps.js, build.mjs, README.md
 tests/         run.mjs (runs all), mechanics.mjs, foundation.mjs (new mechanics + stress sim), cards.mjs
                (random-squad sim, every faction), net.mjs, batch-<batch>.mjs

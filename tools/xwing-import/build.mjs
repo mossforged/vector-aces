@@ -92,6 +92,12 @@ function buildBatch(cat) {
     pilots: Object.fromEntries(Object.entries(cat.PILOTS).map(([d, c]) => [c.id, P[d].name])),
     upgrades: Object.fromEntries(Object.entries(cat.UPGRADES).map(([d, c]) => [c.id, U[d].name])),
     conditions: Object.fromEntries(Object.entries(cat.CONDITIONS || {}).map(([d, c]) => [c.id, C[d].name])),
+    // Paths of the original card images inside the dataset repo — used only to LINK to them.
+    images: Object.fromEntries([
+      ...Object.entries(cat.PILOTS).map(([d, c]) => [c.id, P[d].image]),
+      ...Object.entries(cat.UPGRADES).map(([d, c]) => [c.id, U[d].image]),
+      ...Object.entries(cat.CONDITIONS || {}).map(([d, c]) => [c.id, C[d].image]),
+    ].filter(([, img]) => img)),
   };
   return { ships, pilots, upgrades, conditions, originals };
 }
